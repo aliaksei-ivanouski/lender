@@ -66,7 +66,11 @@ echo "==> Geocoding event cities"
 php artisan events:geocode-cities
 
 echo "==> Storage symlink"
-php artisan storage:link || true
+if [ -L public/storage ]; then
+    echo "    public/storage already linked — skipping"
+else
+    php artisan storage:link
+fi
 
 echo ""
 echo "============================================================"

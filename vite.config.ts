@@ -31,4 +31,13 @@ export default defineConfig({
             formVariants: true,
         }),
     ],
+    build: {
+        rollupOptions: {
+            onwarn(warning, defaultHandler) {
+                // Benign pure-annotation position warnings from reka-ui's bundled @vueuse/core
+                if (warning.code === 'INVALID_ANNOTATION' && /@vueuse\/core/.test(warning.message ?? '')) return;
+                defaultHandler(warning);
+            },
+        },
+    },
 });
