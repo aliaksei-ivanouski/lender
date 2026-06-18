@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
+import { formatStatus } from '@/lib/format';
 import type { EventFilters } from '@/types/data';
 
 const props = defineProps<{
@@ -45,7 +46,7 @@ function onSubmit(): void {
                 @change="onSelectChange('status', $event)"
             >
                 <option value="">All</option>
-                <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
+                <option v-for="s in statuses" :key="s" :value="s">{{ formatStatus(s) }}</option>
             </select>
         </div>
 

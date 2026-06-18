@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { CalendarDate, DateFormatter, parseDate } from '@internationalized/date';
+import { computed, ref, watch } from 'vue';
+import { CalendarDate, DateFormatter, parseDate, today, getLocalTimeZone } from '@internationalized/date';
 import {
     DatePickerRoot,
     DatePickerTrigger,
@@ -8,7 +8,6 @@ import {
     DatePickerCalendar,
     DatePickerHeader,
     DatePickerPrev,
-    DatePickerHeading,
     DatePickerNext,
     DatePickerGrid,
     DatePickerGridHead,
@@ -59,6 +58,46 @@ const displayValue = computed<string>(() => {
     return usFormatter.format(native);
 });
 
+// Placeholder drives the calendar view (month/year navigation)
+// Initialize from current modelValue or today
+const calendarPlaceholder = ref<DateValue>(
+    dateValue.value ?? today(getLocalTimeZone()),
+);
+
+// Sync placeholder when modelValue changes externally so the calendar view follows
+// the selected date when the popover re-opens
+watch(dateValue, (val) => {
+    if (val) calendarPlaceholder.value = val;
+});
+
+// Year range: 2015 to current year + 10
+const currentYear = new Date().getFullYear();
+const yearRange = Array.from(
+    { length: currentYear + 10 - 2015 + 1 },
+    (_, i) => 2015 + i,
+);
+
+const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+// Derive selected month/year from placeholder for the selects
+const selectedMonth = computed(() => (calendarPlaceholder.value as CalendarDate).month);
+const selectedYear = computed(() => (calendarPlaceholder.value as CalendarDate).year);
+
+function onMonthChange(event: Event): void {
+    const month = Number((event.target as HTMLSelectElement).value);
+    const current = calendarPlaceholder.value as CalendarDate;
+    calendarPlaceholder.value = new CalendarDate(current.year, month, 1);
+}
+
+function onYearChange(event: Event): void {
+    const year = Number((event.target as HTMLSelectElement).value);
+    const current = calendarPlaceholder.value as CalendarDate;
+    calendarPlaceholder.value = new CalendarDate(year, current.month, 1);
+}
+
 function onDateSelect(value: DateValue | undefined): void {
     if (!value) {
         emit('update:modelValue', null);
@@ -77,8 +116,10 @@ function onClear(event: MouseEvent): void {
 <template>
     <DatePickerRoot
         :model-value="dateValue"
+        v-model:placeholder="calendarPlaceholder"
         locale="en-US"
         :granularity="'day'"
+        :close-on-select="true"
         @update:model-value="onDateSelect"
     >
         <div class="flex flex-col gap-1">
@@ -123,19 +164,46 @@ function onClear(event: MouseEvent): void {
                 class="z-50 mt-1 rounded-lg border bg-popover p-3 shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
             >
                 <DatePickerCalendar v-slot="{ weekDays, grid }">
-                    <!-- Header: prev / heading / next -->
-                    <DatePickerHeader class="mb-2 flex items-center justify-between">
+                    <!-- Header: prev / month+year selects / next -->
+                    <DatePickerHeader class="mb-2 flex items-center justify-between gap-1">
                         <DatePickerPrev
-                            class="inline-flex size-7 items-center justify-center rounded-md border bg-transparent hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="inline-flex size-7 shrink-0 items-center justify-center rounded-md border bg-transparent hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             :aria-label="'Go to previous month'"
                         >
                             <ChevronLeft class="size-4" />
                         </DatePickerPrev>
 
-                        <DatePickerHeading class="text-sm font-medium" />
+                        <!-- Month + Year selects replace the heading text for richer navigation -->
+                        <div class="flex items-center gap-1">
+                            <select
+                                :value="selectedMonth"
+                                aria-label="Month"
+                                class="h-7 rounded border border-input bg-background px-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                @change="onMonthChange"
+                            >
+                                <option
+                                    v-for="(name, idx) in monthNames"
+                                    :key="idx + 1"
+                                    :value="idx + 1"
+                                >{{ name }}</option>
+                            </select>
+
+                            <select
+                                :value="selectedYear"
+                                aria-label="Year"
+                                class="h-7 rounded border border-input bg-background px-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                @change="onYearChange"
+                            >
+                                <option
+                                    v-for="year in yearRange"
+                                    :key="year"
+                                    :value="year"
+                                >{{ year }}</option>
+                            </select>
+                        </div>
 
                         <DatePickerNext
-                            class="inline-flex size-7 items-center justify-center rounded-md border bg-transparent hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            class="inline-flex size-7 shrink-0 items-center justify-center rounded-md border bg-transparent hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             :aria-label="'Go to next month'"
                         >
                             <ChevronRight class="size-4" />

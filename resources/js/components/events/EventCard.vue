@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import { Badge } from '@/components/ui/badge';
+import { formatStatus } from '@/lib/format';
 import type { EventListItem } from '@/types/data';
 
 const props = defineProps<{
@@ -73,7 +74,7 @@ void props.animate;
                     {{ event.name }}
                 </h3>
                 <Badge :variant="statusVariant(event.status)" class="shrink-0">
-                    {{ event.status }}
+                    {{ formatStatus(event.status) }}
                 </Badge>
             </div>
 
