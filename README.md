@@ -333,7 +333,7 @@ See `tasks/1-codebase-research/RESEARCH.md` for the full audit including all kno
 |---|---|---|
 | **Visual page 1** (distinct layout A) | Not yet built | Card grid or timeline layout; Tailwind v4 + reka-ui components; infinite scroll or paginated load; date/location filters wired to backend |
 | **Visual page 2** (distinct layout B) | Not yet built | Meaningfully different from page 1 (e.g. map view or calendar); same data pipeline |
-| **Images (2+ per event, local)** | Not yet built | New `event_images` table; `public` disk + `storage:link`; seed with shared placeholder files to avoid bloating the DB |
+| **Images (2+ per event, local)** | Not yet built | New `event_images` table; `public` disk + `storage:link`; seed with 8 real PNGs from `database/seeders/images/` (1.png–8.png), two deterministically selected per event |
 | **Addresses from lat/lng** | Not yet built | Precompute city from nearest `CITY_ANCHORS` (offline, fast, matches seeder clustering); store denormalized; do not geocode per request at 1.25M-row scale |
 | **Date/time + timezones** | Not yet built | Display in UTC or derive from coordinates; no JS date lib currently installed — one will be added (dayjs or date-fns) |
 | **Date + location filtering** | Not yet built (date filter plumbed but ignored server-side) | Add `created_time` index; add backend query logic for date range and location/city; fix known `aplyFilters` typo in `Events/Index.vue:148` |
