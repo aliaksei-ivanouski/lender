@@ -11,7 +11,7 @@ import markerIconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png?url';
 import markerShadowUrl from 'leaflet/dist/images/marker-shadow.png?url';
 
 import { Head } from '@inertiajs/vue3';
-import { onMounted, onUnmounted, ref, watch } from 'vue';
+import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import FilterBar from '@/components/events/FilterBar.vue';
 import EventCard from '@/components/events/EventCard.vue';
 import EventEmptyState from '@/components/events/EventEmptyState.vue';
@@ -33,7 +33,7 @@ const mapContainer = ref<HTMLElement | null>(null);
 let map: LeafletMap | null = null;
 let clusterGroup: MarkerClusterGroup | null = null;
 
-// Side panel toggle
+// Side panel toggle — default true (SSR-safe); corrected to breakpoint on mount
 const sidePanelOpen = ref(true);
 
 // Track whether Leaflet has been initialised (guards plotMarkers from being called before init)
@@ -46,6 +46,11 @@ const mapReady = ref(false);
  */
 function plotMarkers(L: typeof import('leaflet').default): void {
     if (!clusterGroup || !map) return;
+
+    // Only fitBounds when this is a fresh plot (cluster was empty before this call).
+    // Subsequent infinite-scroll appends rebuild the full marker set but should NOT
+    // re-zoom/pan the map — the user may have manually navigated to a different area.
+    const wasEmpty = clusterGroup.getLayers().length === 0;
 
     clusterGroup.clearLayers();
 
@@ -65,7 +70,7 @@ function plotMarkers(L: typeof import('leaflet').default): void {
         markersLatLng.push([event.latitude, event.longitude]);
     }
 
-    if (markersLatLng.length > 0 && map) {
+    if (wasEmpty && markersLatLng.length > 0 && map) {
         map.fitBounds(L.latLngBounds(markersLatLng), { maxZoom: 12, padding: [40, 40] });
     }
 }
@@ -82,14 +87,21 @@ function escapeHtml(str: string): string {
 let leafletInstance: typeof import('leaflet').default | null = null;
 
 // Watch rows: on filter change the composable resets rows then re-fetches.
-// We re-plot whenever rows changes (after each successful fetch).
+// Deep watch is required because the composable mutates the array via push() rather than
+// replacing the ref value — a shallow watch never fires on array mutation.
 watch(rows, () => {
     if (mapReady.value && leafletInstance) {
         plotMarkers(leafletInstance);
     }
-});
+}, { deep: true });
 
 onMounted(async () => {
+    // Correct initial panel state to viewport width (SSR defaulted to true above).
+    sidePanelOpen.value = window.matchMedia('(min-width: 768px)').matches;
+
+    // Invalidate map size on viewport resize so tiles/markers stay aligned.
+    window.addEventListener('resize', onWindowResize);
+
     // Dynamic import — SSR-safe (window is not available server-side)
     const L = (await import('leaflet')).default;
     await import('leaflet.markercluster');
@@ -119,11 +131,16 @@ onMounted(async () => {
 
     mapReady.value = true;
 
-    // Initial data load; watch(rows) will call plotMarkers when rows arrive
+    // Plot any rows that already arrived before init finished (data-first race),
+    // then kick off the initial fetch for the normal (init-first) case.
+    // watch(rows) handles all subsequent filter-driven updates.
+    plotMarkers(leafletInstance);
+
     await loadMore();
 });
 
 onUnmounted(() => {
+    window.removeEventListener('resize', onWindowResize);
     map?.remove();
     map = null;
     clusterGroup = null;
@@ -137,6 +154,12 @@ function onFilterApply(): void {
 
 function toggleSidePanel(): void {
     sidePanelOpen.value = !sidePanelOpen.value;
+    // Re-measure map after the panel transition so tiles/markers stay aligned.
+    void nextTick(() => { map?.invalidateSize(); });
+}
+
+function onWindowResize(): void {
+    map?.invalidateSize();
 }
 </script>
 
@@ -257,10 +280,20 @@ function toggleSidePanel(): void {
                 accessibility coverage (WCAG 2.1 SC 2.1.1).
                 Hidden below md unless toggled open.
             -->
+            <!--
+                Mobile (< md): absolute drawer overlaying the map from the right.
+                  - absolute right-0 top-0 h-full w-full max-w-xs z-[1100]
+                  - The map flex-1 keeps full width underneath; the panel slides over it.
+                md+: static flex sibling (md:static md:w-80 md:border-l).
+                  - Reverts absolute positioning; map flex-1 fills the remainder.
+                Hidden (display:none) when sidePanelOpen is false at any breakpoint.
+            -->
             <aside
                 id="event-side-panel"
                 :class="[
-                    'flex w-full flex-col overflow-y-auto border-l bg-card md:w-80',
+                    'flex flex-col overflow-y-auto bg-card',
+                    'absolute right-0 top-0 h-full w-full max-w-xs border-l shadow-lg z-[1100]',
+                    'md:static md:w-80 md:max-w-none md:shadow-none md:z-auto',
                     sidePanelOpen ? 'flex' : 'hidden',
                 ]"
                 aria-label="Event list — accessible alternative to the map"
