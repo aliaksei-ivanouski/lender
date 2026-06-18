@@ -28,7 +28,7 @@ class EventFactory extends Factory
             'latitude' => $lat,
             'longitude' => $lng,
             'payload' => [
-                'name' => ucwords(fake()->words(3, true)),
+                'name' => ucwords(fake()->word().' '.fake()->word().' '.fake()->word()),
                 'category' => $type,
                 'venue' => ['name' => fake()->company(), 'capacity' => fake()->numberBetween(20, 50000)],
                 'location' => ['lat' => $lat, 'lng' => $lng],
@@ -36,5 +36,21 @@ class EventFactory extends Factory
                 'pricing' => ['currency' => 'USD', 'min_price' => fake()->randomFloat(2, 0, 250)],
             ],
         ];
+    }
+
+    /**
+     * State: event with location_city populated from a known city anchor.
+     */
+    public function withCity(string $city = 'New York'): static
+    {
+        return $this->state(fn () => ['location_city' => $city]);
+    }
+
+    /**
+     * State: event guaranteed to be in the future (for reminder tests).
+     */
+    public function future(): static
+    {
+        return $this->state(fn () => ['created_time' => now()->addDays(5)->timestamp]);
     }
 }
