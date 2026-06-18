@@ -9,6 +9,7 @@ use App\Services\TimezoneService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -16,16 +17,17 @@ class EventController extends Controller
 {
     public function index(Request $request): Response
     {
-        return Inertia::render('Events/Index', [
-            'filters' => [
-                'status' => $request->status,
-                'from' => $request->input('from', '2023-01-01'),
-                'to' => $request->input('to'),
-                'location_city' => $request->input('location_city'),
-            ],
-            'statuses' => ['draft', 'published', 'cancelled', 'sold_out'],
-            'cities' => City::orderBy('name')->pluck('name'),
-        ]);
+        return Inertia::render('Events/Index', $this->sharedListingProps($request));
+    }
+
+    public function visualOne(Request $request): Response
+    {
+        return Inertia::render('Events/VisualOne', $this->sharedListingProps($request));
+    }
+
+    public function visualTwo(Request $request): Response
+    {
+        return Inertia::render('Events/VisualTwo', $this->sharedListingProps($request));
     }
 
     public function data(Request $request): JsonResponse
@@ -48,6 +50,23 @@ class EventController extends Controller
         return Inertia::render('Events/Show', [
             'event' => $event,
         ]);
+    }
+
+    /**
+     * @return array{filters: array{status: mixed, from: mixed, to: mixed, location_city: mixed}, statuses: list<string>, cities: Collection<int, string>}
+     */
+    private function sharedListingProps(Request $request): array
+    {
+        return [
+            'filters' => [
+                'status' => $request->status,
+                'from' => $request->input('from', '2023-01-01'),
+                'to' => $request->input('to'),
+                'location_city' => $request->input('location_city'),
+            ],
+            'statuses' => ['draft', 'published', 'cancelled', 'sold_out'],
+            'cities' => City::orderBy('name')->pluck('name'),
+        ];
     }
 
     /**

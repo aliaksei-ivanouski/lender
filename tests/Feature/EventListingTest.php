@@ -78,6 +78,47 @@ it('renders the two visualization pages and the dashboard without authentication
     $this->get(route('dashboard'))->assertOk();
 });
 
+it('visual-1 page renders VisualOne component with shared listing props', function () {
+    $this->get(route('events.visual1'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Events/VisualOne')
+            ->has('filters')
+            ->has('filters.status')
+            ->has('filters.from')
+            ->has('filters.to')
+            ->has('filters.location_city')
+            ->has('statuses', 4)
+            ->has('cities')
+        );
+});
+
+it('visual-2 page renders VisualTwo component with shared listing props', function () {
+    $this->get(route('events.visual2'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Events/VisualTwo')
+            ->has('filters')
+            ->has('filters.status')
+            ->has('filters.from')
+            ->has('filters.to')
+            ->has('filters.location_city')
+            ->has('statuses', 4)
+            ->has('cities')
+        );
+});
+
+it('visual pages pass query string filters into inertia props', function () {
+    $this->get(route('events.visual1', ['status' => 'published', 'from' => '2025-01-01', 'location_city' => 'London']))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Events/VisualOne')
+            ->where('filters.status', 'published')
+            ->where('filters.from', '2025-01-01')
+            ->where('filters.location_city', 'London')
+        );
+});
+
 // ─── Index existence assertions (AC-103) ──────────────────────────────────────
 //
 // We query SQLite's PRAGMA index_list(events) to confirm that the Wave 0
