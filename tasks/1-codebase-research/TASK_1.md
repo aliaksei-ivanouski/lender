@@ -1,6 +1,6 @@
 # TASK-1 — Codebase Research & Comprehensive Report
 
-**Status:** in_progress
+**Status:** in_review (PR open on feat/us-001)
 **Created:** 2026-06-18
 **User Story:** US-001 — Understand the existing codebase
 
@@ -10,7 +10,7 @@ Produce a comprehensive, detailed report of what the existing codebase does: arc
 ## Phases
 | Phase | Status | Output |
 |---|---|---|
-| Research | in_progress | RESEARCH.md |
+| Research | completed | RESEARCH.md |
 | Business Analysis | n/a | — |
 | Design | n/a | — |
 | Planning | n/a | — |
