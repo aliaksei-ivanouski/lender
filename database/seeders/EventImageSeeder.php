@@ -62,7 +62,7 @@ class EventImageSeeder extends Seeder
 
         $now = date('Y-m-d H:i:s');
 
-        Event::query()->select('id')->chunkById(self::CHUNK, function ($events) use ($now) {
+        Event::query()->whereDoesntHave('images')->select('id')->chunkById(self::CHUNK, function ($events) use ($now) {
             $batch = [];
 
             foreach ($events as $event) {

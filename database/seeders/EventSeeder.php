@@ -66,18 +66,27 @@ class EventSeeder extends Seeder
     {
         $rows = (int) config('seeding.rows', 1_250_000);
 
-        $this->command->info("Seeding {$rows} events...");
+        $existing = DB::table('events')->count();
+        $toInsert = max(0, $rows - $existing);
+
+        if ($toInsert === 0) {
+            $this->command->info("events already at target ({$existing}) — skipping");
+
+            return;
+        }
+
+        $this->command->info("Seeding {$toInsert} events (target {$rows}, existing {$existing})...");
 
         $start = microtime(true);
 
-        $this->withSeedingPragmas(function () use ($rows) {
+        $this->withSeedingPragmas(function () use ($toInsert) {
             $this->ensureUsers();
-            $this->insertEvents($rows);
+            $this->insertEvents($toInsert);
         });
 
         $elapsed = round(microtime(true) - $start, 1);
-        $rate = $elapsed > 0 ? round($rows / $elapsed) : $rows;
-        $this->command->info("Done. {$rows} events in {$elapsed}s ({$rate} rows/s).");
+        $rate = $elapsed > 0 ? round($toInsert / $elapsed) : $toInsert;
+        $this->command->info("Done. {$toInsert} events in {$elapsed}s ({$rate} rows/s).");
     }
 
     /**
