@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Run from repo root regardless of where this script is invoked from.
+cd "$(dirname "$0")/.."
+
+echo "==> PHP dependencies"
+if [ ! -d "vendor" ]; then
+    composer install
+else
+    echo "    vendor/ already present — skipping"
+fi
+
+echo "==> Environment file"
+if [ ! -f ".env" ]; then
+    cp .env.example .env
+    echo "    .env created from .env.example"
+else
+    echo "    .env already present — skipping copy"
+fi
+
+echo "==> Application key"
+if ! grep -q '^APP_KEY=base64:' .env; then
+    php artisan key:generate
+else
+    echo "    APP_KEY already set — skipping"
+fi
+
+echo "==> SQLite database file"
+if [ ! -f "database/database.sqlite" ]; then
+    touch database/database.sqlite
+    echo "    database/database.sqlite created"
+else
+    echo "    database/database.sqlite already present — skipping"
+fi
+
+echo "==> JavaScript dependencies"
+NPM_MAJOR="$(npm -v 2>/dev/null | cut -d. -f1)"
+if [ "${NPM_MAJOR:-0}" -lt 7 ] 2>/dev/null; then
+    NPM="npx --yes npm@latest"
+    echo "    Local npm v${NPM_MAJOR} is < 7; will use npm@latest via npx"
+else
+    NPM="npm"
+fi
+
+if [ ! -d "node_modules" ]; then
+    if [ -f "package-lock.json" ]; then
+        $NPM ci
+    else
+        $NPM install
+    fi
+else
+    echo "    node_modules/ already present — skipping"
+fi
+
+echo "==> Building frontend assets"
+npx vite build
+
+echo "==> Running database migrations"
+php artisan migrate --force
+
+echo "==> Seeding database"
+SEED_ROWS="${SEED_ROWS:-2000}" php artisan db:seed --force
+
+echo "==> Geocoding event cities"
+php artisan events:geocode-cities
+
+echo "==> Storage symlink"
+php artisan storage:link || true
+
+echo ""
+echo "============================================================"
+echo "  Setup complete!"
+echo ""
+echo "  To start the app:"
+echo "    php artisan serve"
+echo "    -> http://127.0.0.1:8000/events-visual-1"
+echo ""
+echo "  For HMR development (server + queue + logs + Vite):"
+echo "    composer dev"
+echo ""
+echo "  To re-run with a different seed size:"
+echo "    SEED_ROWS=5000 ./bin/setup"
+echo "============================================================"
