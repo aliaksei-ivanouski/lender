@@ -4,6 +4,36 @@ _Last updated: 2026-06-18_
 
 ---
 
+## Task 5: Event Visual Pages (Wave 2)
+- **Branch**: `feat/us-005` (merged)
+- **Completed**: 2026-06-18
+- **Status**: MERGED (PR #9)
+- **Deliverables**:
+  - Visual 1: responsive card grid (EventCard + EventsSkeleton + EventsEmpty components) with infinite pagination
+  - Visual 2: Leaflet + OpenStreetMap interactive map with Leaflet.MarkerCluster, viewport-synced event list, 2000-event cap
+  - Shared `useEventsData` composable (fetch, filter, paginate, loadAll)
+  - `resources/js/components/ui/date-picker` — en-US (MM/DD/YYYY), teleported calendar, min/max bounds, close-on-select, keyboard-only focus rings
+  - `lib/format.ts` — formatStatus humanizer
+  - Routing: `events-visual-1` + `events-visual-2` → EventController `visualOne()` + `visualTwo()` with sharedListingProps
+  - Removed: `Events/Index.vue` table page (deleted); home route → `/events-visual-1`
+  - One-command setup: `bin/setup` (composer install + key + migrate + seed + npm build)
+  - Idempotent seeders (safe re-run)
+  - Placeholder images: 8 JPEGs in `database/seeders/images/` + `public/storage` symlink via `artisan storage:link`
+  - ADR-013: Leaflet + OSM selected for map (dynamic import, no bundle bloat)
+  - Test baseline: 74 passing (Pest, in-memory SQLite)
+  - Archive: `tasks/5-visual-pages/`
+
+## Task 4: Events Listing Query & Filters (Wave 1)
+- **Branch**: `feat/us-004` (merged)
+- **Completed**: 2026-06-18
+- **Status**: MERGED (PR #8)
+- **Deliverables**:
+  - EventController `list()` endpoint — query date/location filters, pagination, enriched EventResource
+  - Events/FilterBar.vue — date range picker, location dropdown, apply/clear buttons
+  - JSON payload extraction for frontend rendering (name, description, venue, schedule tags)
+  - Test coverage: filtering by created_time range, city name
+  - Archive: `tasks/4-events-listing-query/`
+
 ## Task 3: Data Foundation (Wave 0)
 - **Branch**: `feat/us-003` (merged)
 - **Completed**: 2026-06-18
