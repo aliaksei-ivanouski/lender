@@ -7,12 +7,13 @@ import EventEmptyState from '@/components/events/EventEmptyState.vue';
 import EventErrorState from '@/components/events/EventErrorState.vue';
 import EventCardSkeleton from '@/components/events/EventCardSkeleton.vue';
 import { useEventsData } from '@/composables/useEventsData';
-import type { EventFilters } from '@/types/data';
+import type { DateBounds, EventFilters } from '@/types/data';
 
 const props = defineProps<{
     filters: EventFilters;
     statuses: string[];
     cities: string[];
+    dateBounds?: DateBounds | null;
 }>();
 
 const { form, rows, total, loading, error, hasLoadedOnce, loadedBytes, loadedMs, hasMore, loadMore, setFilters, applyFilters, retry } =
@@ -73,7 +74,7 @@ onBeforeUnmount(() => observer?.disconnect());
         </header>
 
         <!-- Filter bar -->
-        <FilterBar :model-value="form" :statuses="statuses" :cities="cities" :loading="loading" @update:model-value="setFilters" @apply="onApply" />
+        <FilterBar :model-value="form" :statuses="statuses" :cities="cities" :date-bounds="dateBounds ?? null" :loading="loading" @update:model-value="setFilters" @apply="onApply" />
 
         <!-- Card grid region -->
         <section aria-label="Events grid" aria-live="polite" aria-atomic="false">

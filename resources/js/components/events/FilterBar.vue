@@ -2,13 +2,14 @@
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { formatStatus } from '@/lib/format';
-import type { EventFilters } from '@/types/data';
+import type { DateBounds, EventFilters } from '@/types/data';
 
 const props = defineProps<{
     modelValue: EventFilters;
     statuses: string[];
     cities: string[];
     loading?: boolean;
+    dateBounds?: DateBounds | null;
 }>();
 
 const emit = defineEmits<{
@@ -55,6 +56,8 @@ function onSubmit(): void {
             label="From"
             aria-label="Filter from date"
             :model-value="modelValue.from ?? null"
+            :min-date="dateBounds?.min ?? null"
+            :max-date="modelValue.to ?? dateBounds?.max ?? null"
             @update:model-value="update('from', $event)"
         />
 
@@ -63,6 +66,8 @@ function onSubmit(): void {
             label="To"
             aria-label="Filter to date"
             :model-value="modelValue.to ?? null"
+            :min-date="modelValue.from ?? dateBounds?.min ?? null"
+            :max-date="dateBounds?.max ?? null"
             @update:model-value="update('to', $event)"
         />
 

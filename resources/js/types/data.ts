@@ -51,3 +51,12 @@ export interface EventFilters {
   to: string | null;
   location_city: string | null;
 }
+
+/**
+ * DateBounds interface — dataset event date range from the backend
+ * min/max are ISO 'YYYY-MM-DD' strings
+ */
+export interface DateBounds {
+  min: string;
+  max: string;
+}

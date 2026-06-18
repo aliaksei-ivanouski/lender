@@ -27,9 +27,13 @@ const props = withDefaults(defineProps<{
     ariaLabel?: string;
     placeholder?: string;
     id?: string;
+    minDate?: string | null;
+    maxDate?: string | null;
 }>(), {
     modelValue: null,
     placeholder: 'mm/dd/yyyy',
+    minDate: null,
+    maxDate: null,
 });
 
 const emit = defineEmits<{
@@ -44,6 +48,25 @@ const dateValue = computed<DateValue | undefined>(() => {
     if (!props.modelValue) return undefined;
     try {
         return parseDate(props.modelValue);
+    } catch {
+        return undefined;
+    }
+});
+
+// Convert minDate/maxDate ISO strings → DateValue for DatePickerRoot bounds
+const minValue = computed<DateValue | undefined>(() => {
+    if (!props.minDate) return undefined;
+    try {
+        return parseDate(props.minDate);
+    } catch {
+        return undefined;
+    }
+});
+
+const maxValue = computed<DateValue | undefined>(() => {
+    if (!props.maxDate) return undefined;
+    try {
+        return parseDate(props.maxDate);
     } catch {
         return undefined;
     }
@@ -120,6 +143,8 @@ function onClear(event: MouseEvent): void {
         locale="en-US"
         :granularity="'day'"
         :close-on-select="true"
+        :min-value="minValue"
+        :max-value="maxValue"
         @update:model-value="onDateSelect"
     >
         <div class="flex flex-col gap-1">
@@ -249,7 +274,8 @@ function onClear(event: MouseEvent): void {
                                             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                                             'data-[selected]:bg-primary data-[selected]:text-primary-foreground data-[selected]:hover:bg-primary/90',
                                             'data-[outside-view]:text-muted-foreground data-[outside-view]:opacity-50',
-                                            'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+                                            'data-[disabled]:pointer-events-none data-[disabled]:opacity-40 data-[disabled]:cursor-not-allowed',
+                                            'data-[unavailable]:pointer-events-none data-[unavailable]:opacity-40 data-[unavailable]:cursor-not-allowed',
                                             'data-[today]:font-semibold',
                                         )"
                                     />

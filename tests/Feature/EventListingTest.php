@@ -287,6 +287,51 @@ it('EventResource returns event-local timezone fields when city is seeded (US-40
         ->assertJsonPath('data.0.utc_timestamp', 0);
 });
 
+// ─── US-005: dateBounds prop tests ────────────────────────────────────────────
+
+it('visual-1 page exposes dateBounds prop when events exist', function () {
+    $user = User::factory()->create();
+
+    // Earlier event: 2024-03-15 UTC
+    Event::factory()->for($user)->create(['created_time' => mktime(0, 0, 0, 3, 15, 2024)]);
+    // Later event: 2025-11-20 UTC
+    Event::factory()->for($user)->create(['created_time' => mktime(0, 0, 0, 11, 20, 2025)]);
+
+    $this->get(route('events.visual1'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Events/VisualOne')
+            ->has('dateBounds')
+            ->where('dateBounds.min', '2024-03-15')
+            ->where('dateBounds.max', '2025-11-20')
+        );
+});
+
+it('visual-2 page exposes dateBounds prop when events exist', function () {
+    $user = User::factory()->create();
+
+    Event::factory()->for($user)->create(['created_time' => mktime(0, 0, 0, 3, 15, 2024)]);
+    Event::factory()->for($user)->create(['created_time' => mktime(0, 0, 0, 11, 20, 2025)]);
+
+    $this->get(route('events.visual2'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Events/VisualTwo')
+            ->has('dateBounds')
+            ->where('dateBounds.min', '2024-03-15')
+            ->where('dateBounds.max', '2025-11-20')
+        );
+});
+
+it('visual pages return null dateBounds when no events exist', function () {
+    $this->get(route('events.visual1'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Events/VisualOne')
+            ->where('dateBounds', null)
+        );
+});
+
 it('EventResource cover_image_url resolves to the lowest sort_order image url', function () {
     $user = User::factory()->create();
     $event = Event::factory()->for($user)->create(['status' => 'published']);

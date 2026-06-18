@@ -17,13 +17,14 @@ import EventCard from '@/components/events/EventCard.vue';
 import EventEmptyState from '@/components/events/EventEmptyState.vue';
 import EventErrorState from '@/components/events/EventErrorState.vue';
 import { useEventsData } from '@/composables/useEventsData';
-import type { EventFilters, EventListItem } from '@/types/data';
+import type { DateBounds, EventFilters, EventListItem } from '@/types/data';
 import type { Map as LeafletMap, MarkerClusterGroup } from 'leaflet';
 
 const props = defineProps<{
     filters: EventFilters;
     statuses: string[];
     cities: string[];
+    dateBounds?: DateBounds | null;
 }>();
 
 // MAX_MARKERS caps the map dataset to protect against the 1.25 M-row case.
@@ -193,7 +194,7 @@ function onWindowResize(): void {
 
         <!-- Filter bar -->
         <div class="border-b px-6 py-3">
-            <FilterBar :model-value="form" :statuses="statuses" :cities="cities" :loading="loading" @update:model-value="setFilters" @apply="onFilterApply" />
+            <FilterBar :model-value="form" :statuses="statuses" :cities="cities" :date-bounds="dateBounds ?? null" :loading="loading" @update:model-value="setFilters" @apply="onFilterApply" />
         </div>
 
         <!-- Map + side panel layout -->

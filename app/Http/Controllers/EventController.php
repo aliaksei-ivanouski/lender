@@ -10,6 +10,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -48,7 +49,7 @@ class EventController extends Controller
     }
 
     /**
-     * @return array{filters: array{status: mixed, from: mixed, to: mixed, location_city: mixed}, statuses: list<string>, cities: Collection<int, string>}
+     * @return array{filters: array{status: mixed, from: mixed, to: mixed, location_city: mixed}, statuses: list<string>, cities: Collection<int, string>, dateBounds: array{min: string, max: string}|null}
      */
     private function sharedListingProps(Request $request): array
     {
@@ -61,6 +62,27 @@ class EventController extends Controller
             ],
             'statuses' => ['draft', 'published', 'cancelled', 'sold_out'],
             'cities' => City::orderBy('name')->pluck('name'),
+            'dateBounds' => $this->eventDateBounds(),
+        ];
+    }
+
+    /**
+     * Returns the min/max event date range from the dataset, or null if no events exist.
+     *
+     * @return array{min: string, max: string}|null
+     */
+    private function eventDateBounds(): ?array
+    {
+        /** @var object{min_ts: string|null, max_ts: string|null}|null $bounds */
+        $bounds = DB::selectOne('SELECT MIN(created_time) as min_ts, MAX(created_time) as max_ts FROM events');
+
+        if ($bounds === null || $bounds->min_ts === null) {
+            return null;
+        }
+
+        return [
+            'min' => gmdate('Y-m-d', (int) $bounds->min_ts),
+            'max' => gmdate('Y-m-d', (int) $bounds->max_ts),
         ];
     }
 
