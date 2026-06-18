@@ -1,6 +1,6 @@
 # Project State — Index (Tier 1)
 _Last updated: 2026-06-18_
-_Updated after: TASK-5 (Wave 2 visual pages) merged + TASK-4 (Wave 1 events listing) merged_
+_Updated after: TASK-6 (Wave 3 attendees & confirmation email) merged_
 
 **Events Visuals** — Laravel 13 + Vue 3 Inertia starter-kit with large seeded dataset (1.25M events, 3000 users).
 Build target: `Events/VisualOne.vue` + `Events/VisualTwo.vue` (empty stubs) + image support + filtering + attendee registration + reminder emails.
@@ -22,7 +22,7 @@ Build target: `Events/VisualOne.vue` + `Events/VisualTwo.vue` (empty stubs) + im
 |---|---|---|
 | **Dev** | `composer dev` (serve + queue:listen + pail + vite dev) | — |
 | **Setup** | `composer setup` (install + key + migrate + seed + npm build) | — |
-| **Test** | `composer test` (config:clear + pint + phpstan + artisan test) | 74 passing (Pest, in-memory SQLite) |
+| **Test** | `composer test` (config:clear + pint + phpstan + artisan test) | 86 passing (Pest, in-memory SQLite) |
 | **Lint** | `composer lint` (pint) | — |
 | **Types** | `composer types:check` (phpstan L7) + `npm run types:check` (vue-tsc) | — |
 | **Build** | `npm run build` (Vite + Tailwind) | — |
@@ -31,7 +31,7 @@ Build target: `Events/VisualOne.vue` + `Events/VisualTwo.vue` (empty stubs) + im
 
 ## Active Tasks
 
-*None in progress. Wave 3 (attendees & emails) will begin when next scheduled.*
+*None in progress. Wave 4 (scheduler + reminder emails) is next.*
 
 ---
 
@@ -44,10 +44,10 @@ Build target: `Events/VisualOne.vue` + `Events/VisualTwo.vue` (empty stubs) + im
 - **Only DB index on `status`** — `created_time` unindexed; filter by date + location requires new indexes + denormalization
 - **Planted bug**: `Events/Index.vue:148` `@click="aplyFilters"` (typo; function is `applyFilters`); Filter button is no-op
 - **Date + location filters not backend-implemented** — `from` plumbed but `loadListing` ignores it; no location filter at all
-- **No attendees schema yet** — add `attendees`/`event_user` table + relation
-- **No scheduler** — queue worker runs (`queue:listen`), but no `schedule:work` for reminder emails
-- **`MAIL_MAILER=log`** — emails logged not sent; test via `storage/logs` or `pail`; acceptable for local dev
-- **Auth not enforced on event routes** — `/events*` and visual pages are public; decide attendee registration auth model
+- **Attendees schema complete** — `event_registrations` table with `user_id`, `event_id`, status, reminder-sent tracking; unique constraint; Event::registrations() + count
+- **No scheduler yet** — queue worker runs (`queue:listen`), but no `schedule:work` for scheduled reminder emails; Wave 4 scope
+- **`MAIL_MAILER=array` in tests** — logged; concise MessageSent listener logs one line per email; acceptable for local dev + testing
+- **Auth gated** — POST/DELETE `/events/{event}/registrations` require Fortify login; guests redirect to login
 - **Payload type inconsistency** — seeder stores strings; factory stores numbers; don't assume numeric types
 
 ---

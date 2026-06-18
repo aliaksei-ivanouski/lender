@@ -1,7 +1,7 @@
 # Established Coding Patterns
 
 _Last updated: 2026-06-18_
-_Updated after: TASK-5 (Wave 2, visual pages) merged_
+_Updated after: TASK-6 (Wave 3, attendees & confirmation email) merged_
 
 ---
 
@@ -321,9 +321,134 @@ echo "✓ Setup complete"
 
 ---
 
+## Queued Notifications with Dedup (firstOrCreate + wasRecentlyCreated)
+
+**Pattern**: Dispatch a `Notifiable` notification to a queue, deduplicated by unique attribute(s).
+
+```php
+// app/Listeners/EventRegistrationListener.php (in event listener or controller action)
+public function handle(EventRegistrationCreated $event): void {
+  $registration = $event->registration;
+  
+  // Dispatch queued notification only if this is a fresh registration (not a re-fetch)
+  if ($registration->wasRecentlyCreated) {
+    $registration->user->notify(new RegistrationConfirmationNotification($registration));
+  }
+}
+
+// app/Notifications/RegistrationConfirmationNotification.php
+public function via(object $notifiable): array {
+  return ['mail'];
+}
+
+public function toMail(object $notifiable): MailMessage {
+  return (new MailMessage)
+    ->subject("Event Registration Confirmed")
+    ->line("You are registered for {$this->registration->event->name}");
+}
+
+// Controller dispatch (alternative pattern):
+$registration = Event::find($eventId)
+  ->registrations()
+  ->firstOrCreate(
+    ['user_id' => auth()->id()],
+    ['status' => 'confirmed']
+  );
+
+if ($registration->wasRecentlyCreated) {
+  $registration->user->notify(new RegistrationConfirmationNotification($registration));
+}
+```
+
+**Use case**: Attendee registration confirmation emails; reminder emails (Wave 4 will dispatch at scheduled thresholds, not on creation). Ensures each attendee gets exactly one confirmation email even if the form is double-submitted.
+
+---
+
+## Auth-Gated Inertia POST/DELETE with Redirect-Back + Flash Messaging
+
+**Pattern**: Fortify-protected form actions with flash feedback.
+
+```php
+// routes/web.php
+Route::post('/events/{event}/registrations', [EventRegistrationController::class, 'store'])
+  ->middleware('auth')
+  ->name('event.register');
+
+Route::delete('/events/{event}/registrations', [EventRegistrationController::class, 'destroy'])
+  ->middleware('auth')
+  ->name('event.unregister');
+
+// app/Http/Controllers/EventRegistrationController.php
+public function store(Event $event): RedirectResponse {
+  $registration = $event->registrations()
+    ->firstOrCreate(['user_id' => auth()->id()]);
+  
+  if ($registration->wasRecentlyCreated) {
+    auth()->user()->notify(new RegistrationConfirmationNotification($registration));
+  }
+  
+  return back()
+    ->with('flash', [
+      'type' => 'success',
+      'message' => 'You are now registered for this event!',
+    ]);
+}
+
+public function destroy(Event $event): RedirectResponse {
+  auth()->user()->registrations()->where('event_id', $event->id)->delete();
+  
+  return back()
+    ->with('flash', [
+      'type' => 'success',
+      'message' => 'Unregistered from event.',
+    ]);
+}
+
+// Frontend (Inertia/Vue): Events/Show.vue uses route() + form-submission
+<form @submit.prevent="registerEvent" method="POST">
+  <input type="hidden" name="_method" value="POST" />
+  <button type="submit">Register</button>
+</form>
+
+const registerEvent = async () => {
+  router.post(route('event.register', event.id));
+};
+```
+
+**Use case**: User registration/unregistration flows; conditional button display based on `isRegistered` prop.
+
+---
+
+## Concise Mail Logging (MAIL_MAILER=array + MessageSent Listener)
+
+**Pattern**: Log email metadata (to, subject) without full HTML dump.
+
+```php
+// config/mail.php or .env
+MAIL_MAILER=array  # or 'log' for file-based logging
+
+// app/Providers/AppServiceProvider.php
+use Illuminate\Mail\Events\MessageSent;
+
+public function boot(): void {
+  \Illuminate\Support\Facades\Mail::listen(function (MessageSent $event) {
+    \Log::info('Mail sent', [
+      'to' => $event->message->getTo(),
+      'subject' => $event->message->getSubject(),
+    ]);
+  });
+}
+
+// Result in logs:
+// [2026-06-18 14:32:01] local.INFO: Mail sent {"to":{"user@example.com":"User Name"},"subject":"Event Registration Confirmed"}
+```
+
+**Use case**: Local dev + testing. Acceptable alternative to `Mail::fake()` for end-to-end flows. In production, switch to real mailer (SES, Mailgun, Postmark).
+
+---
+
 ## Conventions to Establish in Later Waves
 
-1. **API contracts**: resource/collection structures returned from `EventController`; attendee API shape
-2. **JSON payload decoding**: where and when to `JSON.parse(event.payload)` in Vue vs. backend
-3. **Email queueing**: how confirmation + reminder jobs are dispatched and structured
-4. **Infinite scroll state**: persistence of filter + page state across navigation
+1. **Scheduler integration**: how `schedule:work` dispatches reminder jobs at fixed intervals
+2. **Idempotent reminder dispatch**: how to track reminder-sent without duplicates
+3. **Infinite scroll state**: persistence of filter + page state across navigation
