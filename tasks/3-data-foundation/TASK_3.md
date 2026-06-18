@@ -1,6 +1,6 @@
 # TASK-3 — Wave 0: Data Foundation
 
-**Status:** in_progress
+**Status:** ✓ MERGED (PR #7)
 **Created:** 2026-06-18
 **User Stories:** US-101 (images), US-102 (city derivation), US-103 (indexes), US-105 (bug fix), US-106 (city→IANA tz map), US-401 (timezone display strategy)
 
@@ -10,7 +10,7 @@ Build the data foundation the two Visual pages and the attendee/email features d
 ## Phases
 | Phase | Status | Output |
 |---|---|---|
-| Design | in_progress | ARCHITECTURE.md |
-| Planning | pending | PLANNING.md |
-| Implementation | pending | IMPLEMENTATION.md |
-| QA | pending | — |
+| Design | ✓ completed | ARCHITECTURE.md |
+| Planning | ✓ completed | PLANNING.md |
+| Implementation | ✓ completed | IMPLEMENTATION.md |
+| QA | ✓ completed | — |
