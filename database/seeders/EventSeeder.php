@@ -64,9 +64,9 @@ class EventSeeder extends Seeder
 
     public function run(): void
     {
-        $rows = (int) (env('SEED_ROWS', 1_250_000));
+        $rows = (int) config('seeding.rows', 1_250_000);
 
-        $this->command?->info("Seeding {$rows} events...");
+        $this->command->info("Seeding {$rows} events...");
 
         $start = microtime(true);
 
@@ -77,7 +77,7 @@ class EventSeeder extends Seeder
 
         $elapsed = round(microtime(true) - $start, 1);
         $rate = $elapsed > 0 ? round($rows / $elapsed) : $rows;
-        $this->command?->info("Done. {$rows} events in {$elapsed}s ({$rate} rows/s).");
+        $this->command->info("Done. {$rows} events in {$elapsed}s ({$rate} rows/s).");
     }
 
     /**
@@ -160,7 +160,7 @@ class EventSeeder extends Seeder
             $remaining -= $batchSize;
 
             if ($done % (self::CHUNK * 25) === 0 || $remaining === 0) {
-                $this->command?->getOutput()?->writeln("  inserted {$done}/{$count}");
+                $this->command->getOutput()->writeln("  inserted {$done}/{$count}");
             }
         }
     }
@@ -234,14 +234,14 @@ class EventSeeder extends Seeder
             'notes' => '',
         ];
 
-        $encoded = json_encode($payload);
+        $encoded = json_encode($payload, JSON_THROW_ON_ERROR);
         $pad = self::PAYLOAD_AVG_BYTES - strlen($encoded);
         if ($pad > 0) {
             $payload['notes'] = str_repeat('Lorem ipsum dolor sit amet consectetur adipiscing elit. ', (int) ceil($pad / 56));
             $payload['notes'] = substr($payload['notes'], 0, $pad);
         }
 
-        return json_encode($payload);
+        return json_encode($payload, JSON_THROW_ON_ERROR);
     }
 
     private function venueName(): string
@@ -260,13 +260,16 @@ class EventSeeder extends Seeder
     private function uuidv4(): string
     {
         $data = random_bytes(16);
-        $data[6] = chr((ord($data[6]) & 0x0f) | 0x40);
-        $data[8] = chr((ord($data[8]) & 0x3f) | 0x80);
+        $data[6] = chr((ord($data[6]) & 0x0F) | 0x40);
+        $data[8] = chr((ord($data[8]) & 0x3F) | 0x80);
 
         return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
     }
 
-    /** @return array<int,int> */
+    /**
+     * @param  array<int, int>  $weights
+     * @return array<int, int>
+     */
     private function cumulativeWeights(array $weights): array
     {
         $cumulative = [];
@@ -279,9 +282,13 @@ class EventSeeder extends Seeder
         return $cumulative;
     }
 
-    /** @param array<int,int> $cumulative */
+    /** @param array<int, int> $cumulative */
     private function pick(array $cumulative): int
     {
+        if ($cumulative === []) {
+            return 0;
+        }
+
         $total = end($cumulative);
         $roll = mt_rand(1, $total);
         foreach ($cumulative as $index => $threshold) {

@@ -145,7 +145,7 @@ onBeforeUnmount(() => observer?.disconnect());
                     class="h-9 rounded-md border border-input bg-background px-3 text-sm"
                 />
             </div>
-            <Button type="button" @click.prevent="aplyFilters">Filter</Button>
+            <Button type="button" @click.prevent="applyFilters">Filter</Button>
         </form>
 
         <div class="overflow-x-auto rounded-lg border">
