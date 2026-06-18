@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Resources\EventResource;
 use App\Models\City;
 use App\Models\Event;
+use App\Models\User;
 use App\Services\TimezoneService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
@@ -41,10 +42,76 @@ class EventController extends Controller
 
     public function show(Event $event): Response
     {
-        $event->load('user');
+        $event->load(['user', 'city', 'images', 'registrations.user']);
+
+        /** @var TimezoneService $tzService */
+        $tzService = app(TimezoneService::class);
+        $city = $event->city;
+        $timezone = $city->timezone ?? 'UTC';
+        $tzFields = $tzService->formatEventTime($event->created_time, $timezone);
+
+        $payload = $event->payload ?? [];
+
+        // Resolve ends_at if available
+        $endsAtLocal = null;
+        $endsAtUnix = $payload['schedule']['ends_at'] ?? null;
+        if ($endsAtUnix !== null && is_numeric($endsAtUnix)) {
+            $endsAtFormatted = $tzService->formatEventTime((int) $endsAtUnix, $timezone);
+            $endsAtLocal = $endsAtFormatted['starts_at_local'];
+        }
+
+        // Attendee list: first 20 confirmed attendees (name only — no email/user_id exposed)
+        $attendees = $event->registrations()
+            ->where('status', 'confirmed')
+            ->with('user:id,name')
+            ->latest()
+            ->take(20)
+            ->get()
+            ->map(fn ($r) => [
+                'name' => $r->user->name,
+                'registered_at' => $r->created_at->toDateString(),
+            ]);
+
+        $attendeesCount = $event->registrations()->where('status', 'confirmed')->count();
+
+        /** @var User|null $authUser */
+        $authUser = auth()->user();
+        $isRegistered = $authUser
+            ? $event->registrations()
+                ->where('user_id', $authUser->id)
+                ->where('status', 'confirmed')
+                ->exists()
+            : false;
 
         return Inertia::render('Events/Show', [
-            'event' => $event,
+            'event' => [
+                'id' => (string) $event->id,
+                'name' => $payload['name'] ?? '',
+                'description' => $payload['description'] ?? '',
+                'type' => $event->type,
+                'status' => $event->status,
+                'venue_name' => $payload['venue']['name'] ?? null,
+                'location_city' => $event->location_city,
+                'latitude' => $event->latitude,
+                'longitude' => $event->longitude,
+                'starts_at_local' => $tzFields['starts_at_local'],
+                'starts_at_date' => $tzFields['starts_at_date'],
+                'ends_at_local' => $endsAtLocal,
+                'tz_label' => $tzFields['tz_label'],
+                'tz_identifier' => $tzFields['tz_identifier'],
+                'utc_timestamp' => $tzFields['utc_timestamp'],
+                'images' => $event->images->map(fn ($img) => [
+                    'id' => $img->id,
+                    'url' => $img->url,
+                    'alt' => $img->alt ?? null,
+                    'sort_order' => $img->sort_order,
+                ]),
+                'cover_image_url' => $event->coverImage?->url,
+            ],
+            'attendees' => $attendees,
+            'attendeesCount' => $attendeesCount,
+            'isRegistered' => $isRegistered,
+            'isAuthenticated' => $authUser !== null,
         ]);
     }
 
