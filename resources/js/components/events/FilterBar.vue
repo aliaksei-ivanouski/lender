@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button';
+import { DatePicker } from '@/components/ui/date-picker';
 import type { EventFilters } from '@/types/data';
 
 const props = defineProps<{
@@ -14,17 +15,13 @@ const emit = defineEmits<{
     (e: 'apply'): void;
 }>();
 
-function update(field: keyof EventFilters, value: string): void {
+function update(field: keyof EventFilters, value: string | null): void {
     emit('update:modelValue', { ...props.modelValue, [field]: value || null });
 }
 
 function onSelectChange(field: keyof EventFilters, event: Event): void {
     update(field, (event.target as HTMLSelectElement).value);
     emit('apply');
-}
-
-function onDateInput(field: keyof EventFilters, event: Event): void {
-    update(field, (event.target as HTMLInputElement).value);
 }
 
 function onSubmit(): void {
@@ -52,27 +49,21 @@ function onSubmit(): void {
             </select>
         </div>
 
-        <div class="flex flex-col gap-1">
-            <label class="text-xs text-muted-foreground" for="filter-from">From</label>
-            <input
-                id="filter-from"
-                type="date"
-                :value="modelValue.from ?? ''"
-                class="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                @input="onDateInput('from', $event)"
-            />
-        </div>
+        <DatePicker
+            id="filter-from"
+            label="From"
+            aria-label="Filter from date"
+            :model-value="modelValue.from ?? null"
+            @update:model-value="update('from', $event)"
+        />
 
-        <div class="flex flex-col gap-1">
-            <label class="text-xs text-muted-foreground" for="filter-to">To</label>
-            <input
-                id="filter-to"
-                type="date"
-                :value="modelValue.to ?? ''"
-                class="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                @input="onDateInput('to', $event)"
-            />
-        </div>
+        <DatePicker
+            id="filter-to"
+            label="To"
+            aria-label="Filter to date"
+            :model-value="modelValue.to ?? null"
+            @update:model-value="update('to', $event)"
+        />
 
         <div class="flex flex-col gap-1">
             <label class="text-xs text-muted-foreground" for="filter-location">Location</label>
