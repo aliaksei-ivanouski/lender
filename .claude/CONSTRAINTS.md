@@ -1,25 +1,28 @@
 # Active Constraints & Risks
 
 _Last updated: 2026-06-18_
+_Updated after: TASK-3 (Wave 0) completed_
 
 ---
 
-## Resolved Constraints (2026-06-18)
+## Resolved Constraints (TASK-3, 2026-06-18)
 
 | Constraint | Resolution | ADR | Status |
 |---|---|---|---|
-| Address/location derivation strategy | Reference data in `cities` DB table (name, region, country, lat, lng, timezone), seeded from CityAnchor; `ReverseGeocoder` interface w/ `DatabaseReverseGeocoder` default; bounded SQL query + 24h coordinate cache | ADR-010/011/012 | ✓ RESOLVED |
-| Attendee registration auth model | Authenticated-only via Fortify; `event_registrations(user_id FK, event_id FK, unique)` | ADR-002 | ✓ RESOLVED |
-| Timezone display strategy | Event-local via static CITY_ANCHOR→IANA map (~78 entries); TZ label shown; date filtering on event-local date | ADR-004 | ✓ RESOLVED |
-| Image strategy | 5–10 local placeholders in repo; `event_images` table; bulk seeding; served via `storage/app/public` | ADR-005 | ✓ RESOLVED |
+| Address/location derivation strategy | `ReverseGeocoder` interface w/ `DatabaseReverseGeocoder` (bbox + 24h cache); `cities` table seeded from CityAnchor (~78 entries); indexed on lat/lng for fast lookup | ADR-010/011/012 | ✓ TASK-3 |
+| Timezone display strategy | `TimezoneService::formatEventTime()` returns event-local time + IANA tz_identifier; City→IANA mapping static, stored in cities table | ADR-004 | ✓ TASK-3 |
+| Image storage | `event_images` table (event_id, image_path, order); 8 placeholder JPEGs in repo; served via `storage/app/public` → `/storage/...` URLs | ADR-005 | ✓ TASK-3 |
+| Event location denormalization | `events.location_city` column (indexed); backfilled via `events:geocode-cities` ETL command | ADR-010/011/012 | ✓ TASK-3 |
+| Planted bug fix | `Events/Index.vue:148` typo fixed: `aplyFilters` → `applyFilters` | — | ✓ TASK-3 |
+| PHPStan L7 compliance | All pre-existing PHPStan errors fixed; generics on relations, env() only in config | — | ✓ TASK-3 |
 
 ---
 
-## Active Constraints (Open — to be addressed in implementation)
+## Active Constraints (Open — to be addressed in future waves)
 
 ---
 
-## Scale & Performance (Still Open)
+## Scale & Performance (Still Open — Wave 1)
 
 ### 1.25M events, ~2.5 GB SQLite, performance requirements
 - **Detail**: Default dataset is `SEED_ROWS=1_250_000` events. Listing query must be fast; filtering by date + location requires careful indexing.

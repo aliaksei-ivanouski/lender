@@ -1,6 +1,6 @@
 # Project State — Index (Tier 1)
 _Last updated: 2026-06-18_
-_Updated after: TASK-1 archived (merged), TASK-2 analysis complete_
+_Updated after: TASK-3 data foundation merged (PR #7)_
 
 **Events Visuals** — Laravel 13 + Vue 3 Inertia starter-kit with large seeded dataset (1.25M events, 3000 users).
 Build target: `Events/VisualOne.vue` + `Events/VisualTwo.vue` (empty stubs) + image support + filtering + attendee registration + reminder emails.
@@ -22,7 +22,7 @@ Build target: `Events/VisualOne.vue` + `Events/VisualTwo.vue` (empty stubs) + im
 |---|---|---|
 | **Dev** | `composer dev` (serve + queue:listen + pail + vite dev) | — |
 | **Setup** | `composer setup` (install + key + migrate + seed + npm build) | — |
-| **Test** | `composer test` (config:clear + pint + phpstan + artisan test) | see tests/ — Pest, in-memory SQLite |
+| **Test** | `composer test` (config:clear + pint + phpstan + artisan test) | 62 passing (Pest, in-memory SQLite) |
 | **Lint** | `composer lint` (pint) | — |
 | **Types** | `composer types:check` (phpstan L7) + `npm run types:check` (vue-tsc) | — |
 | **Build** | `npm run build` (Vite + Tailwind) | — |
@@ -31,9 +31,7 @@ Build target: `Events/VisualOne.vue` + `Events/VisualTwo.vue` (empty stubs) + im
 
 ## Active Tasks
 
-| Task | Status | Blocked By | Branch | Detail |
-|---|---|---|---|---|
-| TASK-2 | in_review | none | `feat/us-002` | Business analysis complete; 18 user stories (US-101..106, US-201..203, US-301..305, US-401..402); 6-wave plan; BRS final |
+*None in progress. TASK-4 will be added when Wave 1 begins.*
 
 ---
 

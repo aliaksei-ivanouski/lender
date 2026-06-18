@@ -17,10 +17,13 @@ export interface EventImage {
  */
 export interface EventListItem {
   id: string;
+  name: string;
+  description: string;
   type: string;
   status: string;
   created_time: number; // raw UTC unix timestamp (JS fallback)
   location_city: string | null;
+  venue_name: string | null;
   latitude: number | null;
   longitude: number | null;
   starts_at_local: string; // e.g. "8:00 PM" (from TimezoneService)

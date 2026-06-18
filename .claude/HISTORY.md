@@ -4,6 +4,23 @@ _Last updated: 2026-06-18_
 
 ---
 
+## Task 3: Data Foundation (Wave 0)
+- **Branch**: `feat/us-003` (merged)
+- **Completed**: 2026-06-18
+- **Status**: MERGED (PR #7)
+- **Deliverables**:
+  - `cities` table (name, region, country, lat, lng, timezone) seeded from CityAnchor
+  - `ReverseGeocoder` port/adapter with `DatabaseReverseGeocoder` implementation (bbox + 24h cache)
+  - `event_images` table + `EventImage` model + bulk seeding with 8 placeholder JPEGs
+  - `TimezoneService` for event-local time formatting (formatEventTime returns starts_at_local, starts_at_date, tz_label, tz_identifier, utc_timestamp)
+  - `events.location_city` column (indexed) + migration for bulk population
+  - `events.created_time` index + location_city index
+  - ETL backfill job: `events:geocode-cities` (chunkById + grouped bulk UPDATE)
+  - Planted bug fix: `Events/Index.vue:148` typo `aplyFilters` → `applyFilters`
+  - PHPStan L7 fixes (all pre-existing errors resolved)
+  - Test baseline: 62 passing (Pest, in-memory SQLite)
+  - Archive: `tasks/3-data-foundation/`
+
 ## Task 2: Scope & User Stories (Business Analysis)
 - **Branch**: `feat/us-002` (in_review)
 - **Completed**: 2026-06-18
