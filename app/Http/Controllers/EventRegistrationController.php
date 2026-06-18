@@ -17,18 +17,15 @@ class EventRegistrationController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        /** @var array{0: EventRegistration, 1: bool} $result */
-        $result = EventRegistration::firstOrCreate(
+        $registration = EventRegistration::firstOrCreate(
             ['event_id' => $event->id, 'user_id' => $user->id],
             ['status' => 'confirmed'],
         );
 
-        [, $created] = $result;
-
         $payload = $event->payload ?? [];
         $eventName = $payload['name'] ?? 'this event';
 
-        if ($created) {
+        if ($registration->wasRecentlyCreated) {
             $user->notify(new RegistrationConfirmationNotification($event));
             Inertia::flash('toast', ['type' => 'success', 'message' => "You're registered for {$eventName}!"]);
         } else {
