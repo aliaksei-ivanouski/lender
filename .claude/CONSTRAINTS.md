@@ -1,11 +1,21 @@
 # Active Constraints & Risks
 
 _Last updated: 2026-06-18_
-_Updated after: TASK-3 (Wave 0) completed_
+_Updated after: TASK-6 (Wave 3, attendees & confirmation email) completed_
 
 ---
 
-## Resolved Constraints (TASK-3, 2026-06-18)
+## Resolved Constraints (TASK-6, 2026-06-18)
+
+| Constraint | Resolution | ADR | Status |
+|---|---|---|---|
+| Attendee registration & schema | `event_registrations` table (user_id FK, event_id FK, unique); status + reminder-sent tracking columns reserved for Wave 4; Fortify auth gated; firstOrCreate dedup; RegistrationConfirmationNotification queued on wasRecentlyCreated | ADR-014 | ✓ TASK-6 |
+| Attendee display (privacy) | Event detail shows attendeeCount + first 20 names only (no emails, no PII) | ADR-015 | ✓ TASK-6 |
+| Confirmation email delivery | RegistrationConfirmationNotification queued; MAIL_MAILER=array + concise MessageSent logging (no HTML dump); acceptable for local dev + testing | ADR-016 | ✓ TASK-6 |
+
+---
+
+## Resolved Constraints (Earlier Tasks)
 
 | Constraint | Resolution | ADR | Status |
 |---|---|---|---|
@@ -22,7 +32,12 @@ _Updated after: TASK-3 (Wave 0) completed_
 
 ---
 
-## Scale & Performance (Still Open — Wave 1)
+## Scheduled Reminder Emails (Still Open — Wave 4 / TASK-7)
+
+### No scheduler; queue worker only; reminder emails pending
+- **Detail**: `event_registrations` table includes `reminder_sent_3d` and `reminder_sent_24h` columns (reserved for Wave 4). Queue worker runs (`queue:listen`), but there is no `schedule:work` (scheduler). Reminders cannot be sent until scheduler is implemented.
+- **Impact**: Reminders cannot dispatch at fixed intervals (3 days before, 24 hours before event).
+- **Action required**: Wave 4 (TASK-7) adds `schedule:work` to dev commands; creates `SendEventReminders` command that scans for events within reminder thresholds and dispatches jobs idempotently (tracks reminder-sent timestamps). Ensure each attendee receives exactly one email per threshold.
 
 ### 1.25M events, ~2.5 GB SQLite, performance requirements
 - **Detail**: Default dataset is `SEED_ROWS=1_250_000` events. Listing query must be fast; filtering by date + location requires careful indexing.

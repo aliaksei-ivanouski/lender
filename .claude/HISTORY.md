@@ -4,6 +4,23 @@ _Last updated: 2026-06-18_
 
 ---
 
+## Task 6: Attendees & Confirmation Email (Wave 3)
+- **Branch**: `feat/us-006` (merged)
+- **Completed**: 2026-06-18
+- **Status**: MERGED (PR #10 + follow-up PR #11)
+- **Deliverables**:
+  - `event_registrations` table (user_id FK, event_id FK, unique constraint) + status + reminder-sent tracking columns reserved for Wave 4
+  - `EventRegistration` model + `Event::registrations()` + `Event::attendeesCount`; User relations: registrations/registeredEvents
+  - Auth-gated POST/DELETE `/events/{event}/registrations` (EventRegistrationController) — firstOrCreate dedup, notify only on wasRecentlyCreated, redirect-back + flash messaging
+  - Guests redirected to Fortify login
+  - `RegistrationConfirmationNotification` queued (mail channel) on new registration
+  - `Events/Show.vue` (US-203) — hero/gallery, event-local date/time, venue+address, description, Register/Unregister button or "Log in to register"
+  - Attendee count + first 20 names (names only — no PII) displayed
+  - `EventController@show` returns enriched event + attendees + attendeesCount + isRegistered + isAuthenticated
+  - Mail logging: `MAIL_MAILER=array` in tests; MessageSent listener logs concise one-liner (no full HTML dump)
+  - Test baseline: 86 passing (Pest, in-memory SQLite)
+  - Archive: `tasks/6-attendees/`
+
 ## Task 5: Event Visual Pages (Wave 2)
 - **Branch**: `feat/us-005` (merged)
 - **Completed**: 2026-06-18

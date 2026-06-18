@@ -29,3 +29,6 @@ yarn-error.log
 /.vscode
 /.zed
 /.github
+
+# Orchestrator transient task sentinel (local-only)
+.claude/TASK_IN_PROGRESS
