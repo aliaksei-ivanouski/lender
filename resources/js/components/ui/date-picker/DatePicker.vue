@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { CalendarDate, DateFormatter, parseDate, today, getLocalTimeZone } from '@internationalized/date';
 import {
     DatePickerRoot,
@@ -122,6 +122,10 @@ const yearModel = computed<number>({
     },
 });
 
+// Tracks whether the month/year select interaction was pointer-initiated
+const monthMouseFlag = ref(false);
+const yearMouseFlag = ref(false);
+
 function onDateSelect(value: DateValue | undefined): void {
     if (!value) {
         emit('update:modelValue', null);
@@ -129,11 +133,40 @@ function onDateSelect(value: DateValue | undefined): void {
     }
     // CalendarDate.toString() yields 'YYYY-MM-DD'
     emit('update:modelValue', value.toString());
+    // Blur the trigger on the next tick so closeOnSelect's focus-return doesn't
+    // leave a lingering ring after a mouse pick. Keyboard selection still works
+    // because this fires regardless, but keyboard users re-focus via Tab anyway.
+    nextTick(() => {
+        (document.activeElement as HTMLElement | null)?.blur();
+    });
 }
 
 function onClear(event: MouseEvent): void {
     event.stopPropagation();
     emit('update:modelValue', null);
+}
+
+function onMonthPointerDown(): void {
+    monthMouseFlag.value = true;
+}
+
+function onMonthChange(event: Event): void {
+    // v-model.number handles the value update; we only handle blur here
+    if (monthMouseFlag.value) {
+        (event.target as HTMLElement).blur();
+    }
+    monthMouseFlag.value = false;
+}
+
+function onYearPointerDown(): void {
+    yearMouseFlag.value = true;
+}
+
+function onYearChange(event: Event): void {
+    if (yearMouseFlag.value) {
+        (event.target as HTMLElement).blur();
+    }
+    yearMouseFlag.value = false;
 }
 </script>
 
@@ -160,9 +193,10 @@ function onClear(event: MouseEvent): void {
                 :id="id"
                 :aria-label="ariaLabel ?? label ?? placeholder"
                 :class="cn(
-                    'border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50',
+                    'border-input dark:bg-input/30',
                     'flex h-9 w-40 items-center justify-between gap-1 rounded-md border bg-background',
-                    'px-3 text-sm outline-none focus-visible:ring-[3px]',
+                    'px-3 text-sm outline-none',
+                    'focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background',
                     'disabled:cursor-not-allowed disabled:opacity-50',
                 )"
             >
@@ -205,7 +239,9 @@ function onClear(event: MouseEvent): void {
                             <select
                                 v-model.number="monthModel"
                                 aria-label="Month"
-                                class="h-7 rounded border border-input bg-background px-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                class="h-7 rounded border border-input bg-background px-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                                @pointerdown="onMonthPointerDown"
+                                @change="onMonthChange"
                             >
                                 <option
                                     v-for="(name, idx) in monthNames"
@@ -217,7 +253,9 @@ function onClear(event: MouseEvent): void {
                             <select
                                 v-model.number="yearModel"
                                 aria-label="Year"
-                                class="h-7 rounded border border-input bg-background px-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                class="h-7 rounded border border-input bg-background px-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                                @pointerdown="onYearPointerDown"
+                                @change="onYearChange"
                             >
                                 <option
                                     v-for="year in yearRange"
