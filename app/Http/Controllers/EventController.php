@@ -60,7 +60,7 @@ class EventController extends Controller
         return [
             'filters' => [
                 'status' => $request->status,
-                'from' => $request->input('from', '2023-01-01'),
+                'from' => $request->input('from'),
                 'to' => $request->input('to'),
                 'location_city' => $request->input('location_city'),
             ],

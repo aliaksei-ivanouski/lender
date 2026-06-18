@@ -14,7 +14,7 @@ const props = defineProps<{
     cities: string[];
 }>();
 
-const { form, rows, total, loading, error, hasLoadedOnce, loadedBytes, loadedMs, hasMore, loadMore, applyFilters, retry, statusVariant } =
+const { form, rows, total, loading, error, hasLoadedOnce, loadedBytes, loadedMs, hasMore, loadMore, setFilters, applyFilters, retry, statusVariant } =
     useEventsData(props.filters);
 
 const sentinel = ref<HTMLElement | null>(null);
@@ -60,7 +60,7 @@ onBeforeUnmount(() => observer?.disconnect());
             </p>
         </div>
 
-        <FilterBar v-model="form" :statuses="statuses" :cities="cities" :loading="loading" @apply="onApply" />
+        <FilterBar :model-value="form" :statuses="statuses" :cities="cities" :loading="loading" @update:model-value="setFilters" @apply="onApply" />
 
         <div aria-live="polite" aria-atomic="false">
             <!-- Initial skeleton loading -->

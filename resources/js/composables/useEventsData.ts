@@ -18,6 +18,7 @@ export interface UseEventsDataReturn {
     loadedMs: Ref<number>;
     hasMore: ComputedRef<boolean>;
     loadMore: () => Promise<void>;
+    setFilters: (partial: Partial<EventFilters>) => void;
     applyFilters: (newFilters?: Partial<EventFilters>) => void;
     retry: () => void;
     statusVariant: (status: string) => BadgeVariants['variant'];
@@ -101,6 +102,13 @@ export function useEventsData(initialFilters: EventFilters): UseEventsDataReturn
         error.value = null;
     }
 
+    function setFilters(partial: Partial<EventFilters>): void {
+        if (partial.status !== undefined) form.status = partial.status;
+        if (partial.from !== undefined) form.from = partial.from;
+        if (partial.to !== undefined) form.to = partial.to;
+        if (partial.location_city !== undefined) form.location_city = partial.location_city;
+    }
+
     function applyFilters(newFilters?: Partial<EventFilters>): void {
         if (newFilters) {
             if (newFilters.status !== undefined) form.status = newFilters.status;
@@ -152,6 +160,7 @@ export function useEventsData(initialFilters: EventFilters): UseEventsDataReturn
         loadedMs,
         hasMore,
         loadMore,
+        setFilters,
         applyFilters,
         retry,
         statusVariant,

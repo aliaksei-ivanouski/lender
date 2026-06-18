@@ -26,7 +26,7 @@ const props = defineProps<{
     cities: string[];
 }>();
 
-const { form, rows, total, loading, error, hasLoadedOnce, loadMore, applyFilters, retry } = useEventsData(props.filters);
+const { form, rows, total, loading, error, hasLoadedOnce, loadMore, setFilters, applyFilters, retry } = useEventsData(props.filters);
 
 // Map refs — non-reactive (raw Leaflet objects must not be made reactive)
 const mapContainer = ref<HTMLElement | null>(null);
@@ -187,7 +187,7 @@ function onWindowResize(): void {
 
         <!-- Filter bar -->
         <div class="border-b px-6 py-3">
-            <FilterBar v-model="form" :statuses="statuses" :cities="cities" :loading="loading" @apply="onFilterApply" />
+            <FilterBar :model-value="form" :statuses="statuses" :cities="cities" :loading="loading" @update:model-value="setFilters" @apply="onFilterApply" />
         </div>
 
         <!-- Map + side panel layout -->

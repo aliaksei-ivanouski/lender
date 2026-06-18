@@ -15,7 +15,7 @@ const props = defineProps<{
     cities: string[];
 }>();
 
-const { form, rows, total, loading, error, hasLoadedOnce, loadedBytes, loadedMs, hasMore, loadMore, applyFilters, retry } =
+const { form, rows, total, loading, error, hasLoadedOnce, loadedBytes, loadedMs, hasMore, loadMore, setFilters, applyFilters, retry } =
     useEventsData(props.filters);
 
 const sentinel = ref<HTMLElement | null>(null);
@@ -73,7 +73,7 @@ onBeforeUnmount(() => observer?.disconnect());
         </header>
 
         <!-- Filter bar -->
-        <FilterBar v-model="form" :statuses="statuses" :cities="cities" :loading="loading" @apply="onApply" />
+        <FilterBar :model-value="form" :statuses="statuses" :cities="cities" :loading="loading" @update:model-value="setFilters" @apply="onApply" />
 
         <!-- Card grid region -->
         <section aria-label="Events grid" aria-live="polite" aria-atomic="false">
