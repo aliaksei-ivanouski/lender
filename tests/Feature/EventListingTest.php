@@ -3,6 +3,7 @@
 use App\Models\Event;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
 
@@ -72,4 +73,27 @@ it('renders the two visualization pages and the dashboard without authentication
     $this->get(route('events.visual1'))->assertOk();
     $this->get(route('events.visual2'))->assertOk();
     $this->get(route('dashboard'))->assertOk();
+});
+
+// ─── Index existence assertions (AC-103) ──────────────────────────────────────
+//
+// We query SQLite's PRAGMA index_list(events) to confirm that the Wave 0
+// migrations created the required indexes on the events table.
+
+it('events table has a created_time index (AC-103)', function () {
+    /** @var list<object{seq: int, name: string, unique: int, origin: string, partial: int}> $indexes */
+    $indexes = DB::select('PRAGMA index_list(events)');
+
+    $indexNames = array_column($indexes, 'name');
+
+    expect($indexNames)->toContain('events_created_time_index');
+});
+
+it('events table has a location_city index (AC-103)', function () {
+    /** @var list<object{seq: int, name: string, unique: int, origin: string, partial: int}> $indexes */
+    $indexes = DB::select('PRAGMA index_list(events)');
+
+    $indexNames = array_column($indexes, 'name');
+
+    expect($indexNames)->toContain('events_location_city_index');
 });

@@ -26,6 +26,6 @@ class DatabaseSeeder extends Seeder
         // laptop). Override with SEED_ROWS, e.g. SEED_ROWS=50000 php artisan db:seed
         $this->call(EventSeeder::class);
 
-        // $this->call(EventImageSeeder::class); // wired in Wave 0-C
+        $this->call(EventImageSeeder::class);
     }
 }
