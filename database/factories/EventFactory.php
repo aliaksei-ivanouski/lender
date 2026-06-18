@@ -37,4 +37,20 @@ class EventFactory extends Factory
             ],
         ];
     }
+
+    /**
+     * State: event with location_city populated from a known city anchor.
+     */
+    public function withCity(string $city = 'New York'): static
+    {
+        return $this->state(fn () => ['location_city' => $city]);
+    }
+
+    /**
+     * State: event guaranteed to be in the future (for reminder tests).
+     */
+    public function future(): static
+    {
+        return $this->state(fn () => ['created_time' => now()->addDays(5)->timestamp]);
+    }
 }
