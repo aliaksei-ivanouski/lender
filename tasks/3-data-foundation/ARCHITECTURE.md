@@ -2,7 +2,39 @@
 
 **Task:** TASK-3  
 **Date:** 2026-06-18  
-**Status:** FINAL — ready for implementation
+**Status:** REVISED R1 — 2026-06-18 — geocoding design replaced (see § R1 below)
+
+---
+
+## Revision R1 — Geocoding moved to DB-backed ReverseGeocoder (2026-06-18)
+
+### What changed
+
+The original design (DEC-003, DEC-005, §4, §5.1, §5.2) used `App\Support\CityAnchor` as the runtime geocoding engine: `GeocodingService` called `CityAnchor::all()` on every reverse-geocode request, loading all ~75 anchors into memory and scanning the full set for the nearest match. `TimezoneService` derived IANA timezone from the same static `CityAnchor::timezoneMap()` call.
+
+This design has been **rejected on architectural grounds** and replaced with the DB-backed port+adapter described in §4-R1 and §5-R1 below.
+
+### Why the original design was wrong
+
+1. **Wrong boundary.** Baking an entire reference dataset into application code and scanning it in memory at request time conflates two concerns: (a) seed/reference data management and (b) geocoding as a queryable service. These are distinct responsibilities.
+2. **False "small fixed set" assumption hardcoded into production code.** 75 anchors is small today. The architecture must not encode that assumption as an in-process full-scan loop. If the dataset grows to thousands of cities (or is replaced by a real API), this design requires code changes, not configuration changes.
+3. **Not replaceable.** There is no seam to swap in a real external geocoder (Nominatim, Google Maps) without rewriting callers. A proper port+adapter provides that seam.
+
+**Nuance:** The 75 anchors are the `EventSeeder`'s generation seeds, so cardinality is genuinely small today — the objection is not about current memory or speed. It is about the architectural boundary and extensibility. A DB table with 75 rows today is unchanged by adding 750 rows tomorrow; a static PHP class is not.
+
+### What replaces it
+
+| Original | Replacement |
+|---|---|
+| `CityAnchor::all()` scanned at request time | Never called at request time |
+| `GeocodingService` (in-memory scan) | `ReverseGeocoder` interface + `DatabaseReverseGeocoder` adapter |
+| `TimezoneService` reads `CityAnchor::timezoneMap()` | `TimezoneService` reads `city->timezone` from the resolved `City` model |
+| No `cities` table | New `cities` table (seeded once from `CityAnchor` data) |
+| `CityAnchor` used by services at runtime | `CityAnchor` retained but demoted to **seed-only** — never imported at request time |
+
+### Fate of existing PR #5 (Wave 0-B)
+
+PR #5 implements `GeocodingService` and `TimezoneService` against `CityAnchor`. It MUST NOT be merged as-is. It will be **revised** to the R1 design: `GeocodingService` is removed, `TimezoneService` is updated to accept a `City` model rather than call `CityAnchor::timezoneMap()`, and `DatabaseReverseGeocoder` is added.
 
 ---
 
@@ -11,12 +43,13 @@
 Wave 0 establishes the data infrastructure that every subsequent wave depends on:
 
 - `event_images` table + placeholder JPEG files + storage link
-- `events.location_city` column + offline geocoding service
-- CITY_ANCHOR → IANA timezone static map (single source of truth)
+- `events.location_city` column + DB-backed reverse geocoding service
+- `cities` table (seeded from `CityAnchor` data) as the queryable reference dataset
+- `ReverseGeocoder` interface + `DatabaseReverseGeocoder` adapter (port+adapter pattern)
 - DB indexes for date + location filtering
 - Bug fix for the broken filter button
 
-No Wave 1 or Wave 2 work can proceed until all Wave 0 migrations are run and the city-anchor dataset is populated.
+No Wave 1 or Wave 2 work can proceed until all Wave 0 migrations are run and the cities table is seeded.
 
 ---
 
@@ -36,17 +69,25 @@ No Wave 1 or Wave 2 work can proceed until all Wave 0 migrations are run and the
 
 Chosen: physical rows with recycled path strings. Image seeding is done in a dedicated `EventImageSeeder` called after `EventSeeder`, using the same `CHUNK=4000` bulk-insert pattern and the seeding PRAGMAs from `EventSeeder::withSeedingPragmas`.
 
-### DEC-003: City/timezone static data lives in `app/Support/CityAnchor.php`
+### DEC-003: [REVISED R1] `CityAnchor` is seed-data only; runtime geocoding uses the `cities` DB table
 
-A single PHP class (not a config file) holds the authoritative array of `CityAnchor` structs (lat, lng, city, region, country, iana_tz). Rationale: config files are for environment-specific values; this data is purely domain knowledge that changes only when anchors are added. A PHP class gives type safety, namespace, and is directly importable by services, seeders, and artisan commands without calling `config()`. Config YAML would require a service wrapper anyway.
+`App\Support\CityAnchor` is retained as the **source of truth for seeding** the `cities` table. It is imported exclusively by `CitySeeder` (one-time execution). It is NEVER imported by services, controllers, or artisan commands at request time.
+
+Runtime geocoding queries the `cities` table via the `ReverseGeocoder` interface (see §4-R1, §5-R1). This keeps the boundary clean: reference data lives in the DB, not in application code.
+
+**Why not a config file or JSON?** A seeder-source PHP class is still the right format for the initial data definition — type safety, no I/O at seed-import, directly diffable in git. It remains the canonical "what cities exist" definition. The DB is the runtime queryable form of that same data.
+
+### DEC-003b: [NEW R1] `cities` DB table is the runtime geocoding reference dataset
+
+A `cities` table (id, name, region, country, latitude DECIMAL(10,7), longitude DECIMAL(10,7), timezone VARCHAR(64), timestamps) is seeded once from `CityAnchor::all()`. All reverse-geocode lookups query this table — never the PHP class. The table starts at ~75 rows and scales to thousands with zero code changes.
 
 ### DEC-004: `location_city` stores "CityName" (bare city name, NOT "City, Country")
 
 The BRS acceptance criterion AC-102-2 says `location_city` is set to "the name of the nearest CITY_ANCHOR (e.g. 'New York')". The tz map in AC-106-1 is also keyed by city name (e.g. `"New York" => "America/New_York"`). Storing bare city name keeps the lookup O(1) with no string parsing. The frontend can compose "New York, USA" from city + country if needed (country is returned via a separate accessor or the CityAnchor dataset).
 
-### DEC-005: Timezone NOT stored as a column — derived at read time from `location_city`
+### DEC-005: [REVISED R1] Timezone derived from resolved `City` model, not a static map
 
-The BRS §5.1 states this explicitly: "Timezone is derived at read time from the static CITY_ANCHOR → IANA timezone map using `location_city` as the lookup key; it is NOT stored as a separate column." This keeps data consistent (no drift between `location_city` and `timezone`) and saves a migration.
+IANA timezone is stored as a column on the `cities` table (`timezone VARCHAR(64)`). When a reverse-geocode call resolves to a `City`, the timezone comes with it in the same query result — no second lookup, no static map call. `TimezoneService` accepts a resolved `City` model (or its timezone string directly) rather than calling `CityAnchor::timezoneMap()`. This keeps data consistent: the single source for both city name and timezone is the `City` row. No drift is possible because both values come from the same resolved object.
 
 ### DEC-006: `from`/`to` date filter operates on event-local date (not UTC)
 
@@ -56,13 +97,61 @@ Per AC-104-1/2 and D-004. SQLite does not have a timezone-aware `DATE()` functio
 
 The default listing query always has `ORDER BY created_time DESC`; `status` is the most common filter. SQLite can use a composite index `(status, created_time)` for both the WHERE and ORDER BY in a single scan when status is provided. For unfiltered queries (no status), the single-column `created_time` index covers the sort. Both indexes are needed (see §6).
 
-### DEC-008: Backfill via chunked artisan command, NOT a raw SQL UPDATE
+### DEC-008: [REVISED R1] Backfill uses port+cache at request time; ETL command uses bulk cache for throughput
+
+The `events:geocode-cities` backfill command is a one-time ETL job. It is architecturally distinct from the request-time path:
+
+- **Request time:** uses `ReverseGeocoder` port → `DatabaseReverseGeocoder` adapter (bbox query + Laravel cache keyed on rounded coordinates).
+- **Backfill ETL:** MAY load the small `cities` reference set once into a PHP array at command start (to avoid 1.25M individual DB queries), and/or pre-warm the cache keyed by rounded coordinates. Events cluster tightly around anchors (EventSeeder jitters ±0.5°), so after the first ~75 unique rounded coordinate pairs are resolved and cached, nearly all remaining 1.25M events hit the cache. This is a deliberate, explicit ETL optimization — NOT loading-all-on-every-request. The request-time adapter is unchanged; it always goes through the DB+cache path.
+
+**Original rationale for chunked UPDATE strategy (still applies):** A bulk `UPDATE events SET location_city = CASE ...` across 1.25M rows would lock the database. The command reads in chunks of 4000, resolves city in PHP, and issues grouped `UPDATE ... WHERE id IN (...)` per unique city per chunk (~75 cities × 1 UPDATE each = 75 statements per 4000-event chunk).
+
+### DEC-010: [NEW R1] `ReverseGeocoder` interface is the geocoding seam
+
+```php
+namespace App\Services\Geocoding;
+
+interface ReverseGeocoder
+{
+    public function reverse(float $lat, float $lng): ?City;
+}
+```
+
+`DatabaseReverseGeocoder` is the default binding. A future `NominatimReverseGeocoder` or `GoogleMapsReverseGeocoder` can be swapped in `AppServiceProvider` with zero caller changes. This is the only place where the choice of geocoding backend is made.
+
+### DEC-011: [NEW R1] `DatabaseReverseGeocoder` uses bbox prefilter + ORDER BY squared distance, never full table scan
+
+SQLite has no native KNN or spatial index. The adapter uses:
+1. **Bounding box prefilter:** `WHERE latitude BETWEEN (lat - Δ) AND (lat + Δ) AND longitude BETWEEN (lng - Δ) AND (lng + Δ)`. Δ starts at 5.0° (covers ~500 km at mid-latitudes, guaranteed to include the nearest anchor given ±0.5° event jitter). The `(latitude, longitude)` index makes this a fast index range scan.
+2. **ORDER BY squared distance + LIMIT 1:** `ORDER BY ((latitude - ?) * (latitude - ?) + (longitude - ?) * (longitude - ?)) LIMIT 1`. Applies on the bbox-filtered candidate set (small).
+3. **Δ widening:** If no rows match at Δ=5.0° (edge case — e.g. coordinate outside all anchors), retry at Δ=20.0°, then Δ=90.0°. In practice this path is never reached for EventSeeder-generated events.
+4. **Cache:** Results are cached in the Laravel cache (`geocoder.rev:{round($lat,2)}.{round($lng,2)}`) with a long TTL (24 h). Coordinates rounded to 2 decimal places (~1 km grid), so events within the same ~1 km cell share a cache entry. With ~75 unique anchors and ±0.5° jitter, the warm cache hit rate approaches 100% after the first pass.
+
+### DEC-009 (backfill — former DEC-008)
 
 A bulk `UPDATE events SET location_city = CASE ...` with 78 distance calculations per row across 1.25M rows would lock the database. Instead: `php artisan events:geocode-cities` reads events in chunks of 4000, computes location_city in PHP (the nearest-anchor lookup is O(78) per event, trivially fast), and issues a bulk UPDATE per chunk with a `WHERE id IN (...)` clause. This matches the seeder pattern, respects SQLite's locking model, and can be re-run safely (idempotent: `WHERE location_city IS NULL`).
 
 ---
 
 ## 3. New Database Schema
+
+### 3.0 Migration: `create_cities_table` [NEW R1]
+
+**File:** `database/migrations/2026_06_18_000000_create_cities_table.php`
+
+```php
+$table->id();
+$table->string('name', 100);
+$table->string('region', 100)->nullable();
+$table->string('country', 2);                     // ISO 3166-1 alpha-2
+$table->decimal('latitude', 10, 7);
+$table->decimal('longitude', 10, 7);
+$table->string('timezone', 64);                   // IANA tz identifier
+$table->timestamps();
+$table->index(['latitude', 'longitude']);          // bbox prefilter index
+```
+
+This migration MUST run before `add_location_city_and_indexes_to_events_table` (lower timestamp). Seeded by `CitySeeder` (see §4-R1).
 
 ### 3.1 Migration: `add_location_city_to_events_table`
 
@@ -121,19 +210,17 @@ $table->index(['event_id', 'sort_order']);
 
 ---
 
-## 4. Static City Anchor Dataset
+## 4. City Reference Data [REVISED R1]
 
-### 4.1 `app/Support/CityAnchor.php` — Single Source of Truth
+### 4.1 `app/Support/CityAnchor.php` — Seed-Data Source Only
 
-This class is the canonical home for all 78 city anchor definitions. It is imported by:
-- `EventSeeder` (coordinates — replaces the inline `CITY_ANCHORS` constant)
-- `GeocodingService` (nearest-anchor lookup)
-- `TimezoneService` (city → IANA tz)
-- `EventImageSeeder` (indirectly, via seeder context)
-- `app/Console/Commands/GeocodeEventCities.php` (backfill command)
-- `EventController` (city list for filter dropdown)
+This class is the canonical definition of all city anchor entries. After R1 it is imported **only** by:
+- `CitySeeder` (one-time seed of `cities` table)
+- `EventSeeder` (coordinates for event generation — existing usage, unchanged)
 
-**Class contract:**
+It is **NOT** imported by any service, controller, or artisan command that runs at request time. No production code path calls `CityAnchor::all()` or `CityAnchor::timezoneMap()` after seeding is complete.
+
+**Class contract (unchanged — seed-data role clarified):**
 
 ```php
 namespace App\Support;
@@ -141,221 +228,164 @@ namespace App\Support;
 final class CityAnchor
 {
     public function __construct(
-        public readonly string $city,      // bare city name, e.g. "New York"
-        public readonly string $region,    // state/province/country subdivision, e.g. "NY" or "Île-de-France"
-        public readonly string $country,   // ISO 3166-1 alpha-2, e.g. "US"
+        public readonly string $city,
+        public readonly string $region,
+        public readonly string $country,
         public readonly float  $lat,
         public readonly float  $lng,
-        public readonly string $ianaTimezone, // e.g. "America/New_York"
+        public readonly string $ianaTimezone,
     ) {}
 
     /** @return list<self> */
-    public static function all(): array { ... }
-
-    /** @return array<string, string>  city => ianaTimezone */
-    public static function timezoneMap(): array { ... }
-
-    /** @return list<string> sorted list of city names for filter dropdown */
-    public static function cityNames(): array { ... }
+    public static function all(): array { ... }   // used by CitySeeder + EventSeeder ONLY
 }
 ```
 
-**`all()` returns all 78 anchors as `CityAnchor` objects.** The array is defined inline in the method body (not loaded from file/DB at runtime). PHP will cache the opcode; no I/O on each call.
+The `timezoneMap()` and `cityNames()` methods are **removed** — they were only needed when this class was a runtime service. City name list for the filter dropdown is now fetched from the `cities` DB table via `City::orderBy('name')->pluck('name')`.
 
-**Sample entries (representative, not exhaustive — engineer fills all 78 from the seeder coordinates):**
+### 4.2 `app/Models/City.php` [NEW R1]
 
 ```php
-new self('New York',      'NY',            'US', 40.7128, -74.0060, 'America/New_York'),
-new self('Los Angeles',   'CA',            'US', 34.0522, -118.2437,'America/Los_Angeles'),
-new self('Chicago',       'IL',            'US', 41.8781, -87.6298, 'America/Chicago'),
-new self('Houston',       'TX',            'US', 29.7604, -95.3698, 'America/Chicago'),
-new self('Phoenix',       'AZ',            'US', 33.4484, -112.0740,'America/Phoenix'),
-new self('Philadelphia',  'PA',            'US', 39.9526, -75.1652, 'America/New_York'),
-new self('San Antonio',   'TX',            'US', 29.4241, -98.4936, 'America/Chicago'),
-new self('San Diego',     'CA',            'US', 32.7157, -117.1611,'America/Los_Angeles'),
-new self('Dallas',        'TX',            'US', 32.7767, -96.7970, 'America/Chicago'),
-new self('San Jose',      'CA',            'US', 37.3382, -121.8863,'America/Los_Angeles'),
-new self('Austin',        'TX',            'US', 30.2672, -97.7431, 'America/Chicago'),
-new self('San Francisco', 'CA',            'US', 37.7749, -122.4194,'America/Los_Angeles'),
-new self('Seattle',       'WA',            'US', 47.6062, -122.3321,'America/Los_Angeles'),
-new self('Denver',        'CO',            'US', 39.7392, -104.9903,'America/Denver'),
-new self('Boston',        'MA',            'US', 42.3601, -71.0589, 'America/New_York'),
-new self('Las Vegas',     'NV',            'US', 36.1699, -115.1398,'America/Los_Angeles'),
-new self('Miami',         'FL',            'US', 25.7617, -80.1918, 'America/New_York'),
-new self('Atlanta',       'GA',            'US', 33.7490, -84.3880, 'America/New_York'),
-new self('Washington',    'DC',            'US', 38.9072, -77.0369, 'America/New_York'),
-new self('Nashville',     'TN',            'US', 36.1627, -86.7816, 'America/Chicago'),
-new self('Portland',      'OR',            'US', 45.5152, -122.6784,'America/Los_Angeles'),
-new self('New Orleans',   'LA',            'US', 29.9511, -90.0715, 'America/Chicago'),
-// Canada
-new self('Toronto',       'ON',            'CA', 43.6532, -79.3832, 'America/Toronto'),
-new self('Montreal',      'QC',            'CA', 45.5019, -73.5674, 'America/Toronto'),
-new self('Vancouver',     'BC',            'CA', 49.2827, -123.1207,'America/Vancouver'),
-new self('Calgary',       'AB',            'CA', 51.0447, -114.0719,'America/Edmonton'),
-new self('Ottawa',        'ON',            'CA', 45.4215, -75.6972, 'America/Toronto'),
-new self('Edmonton',      'AB',            'CA', 53.5461, -113.4938,'America/Edmonton'),
-new self('Quebec City',   'QC',            'CA', 46.8139, -71.2080, 'America/Toronto'),
-new self('Winnipeg',      'MB',            'CA', 49.8951, -97.1384, 'America/Winnipeg'),
-// Mexico
-new self('Mexico City',   'CDMX',          'MX', 19.4326, -99.1332, 'America/Mexico_City'),
-new self('Guadalajara',   'Jalisco',       'MX', 20.6597, -103.3496,'America/Mexico_City'),
-new self('Monterrey',     'Nuevo León',    'MX', 25.6866, -100.3161,'America/Monterrey'),
-new self('Puebla',        'Puebla',        'MX', 19.0414, -98.2063, 'America/Mexico_City'),
-new self('Tijuana',       'Baja California','MX',32.5149, -117.0382,'America/Tijuana'),
-new self('Cancún',        'Q. Roo',        'MX', 21.1619, -86.8515, 'America/Cancun'),
-new self('Mérida',        'Yucatán',       'MX', 20.9674, -89.5926, 'America/Merida'),
-// Europe
-new self('London',        'England',       'GB', 51.5074, -0.1278,  'Europe/London'),
-new self('Paris',         'Île-de-France', 'FR', 48.8566,  2.3522,  'Europe/Paris'),
-new self('Berlin',        'Berlin',        'DE', 52.5200, 13.4050,  'Europe/Berlin'),
-new self('Madrid',        'Madrid',        'ES', 40.4168, -3.7038,  'Europe/Madrid'),
-new self('Rome',          'Lazio',         'IT', 41.9028, 12.4964,  'Europe/Rome'),
-new self('Amsterdam',     'North Holland', 'NL', 52.3676,  4.9041,  'Europe/Amsterdam'),
-new self('Barcelona',     'Catalonia',     'ES', 41.3851,  2.1734,  'Europe/Madrid'),
-new self('Munich',        'Bavaria',       'DE', 48.1351, 11.5820,  'Europe/Berlin'),
-new self('Milan',         'Lombardy',      'IT', 45.4642,  9.1900,  'Europe/Rome'),
-new self('Vienna',        'Vienna',        'AT', 48.2082, 16.3738,  'Europe/Vienna'),
-new self('Prague',        'Bohemia',       'CZ', 50.0755, 14.4378,  'Europe/Prague'),
-new self('Lisbon',        'Lisboa',        'PT', 38.7223, -9.1393,  'Europe/Lisbon'),
-new self('Dublin',        'Leinster',      'IE', 53.3498, -6.2603,  'Europe/Dublin'),
-new self('Copenhagen',    'Capital Region','DK', 55.6761, 12.5683,  'Europe/Copenhagen'),
-new self('Stockholm',     'Stockholm',     'SE', 59.3293, 18.0686,  'Europe/Stockholm'),
-new self('Oslo',          'Oslo',          'NO', 59.9139, 10.7522,  'Europe/Oslo'),
-new self('Helsinki',      'Uusimaa',       'FI', 60.1699, 24.9384,  'Europe/Helsinki'),
-new self('Brussels',      'Brussels',      'BE', 50.8503,  4.3517,  'Europe/Brussels'),
-new self('Zurich',        'Zurich',        'CH', 47.3769,  8.5417,  'Europe/Zurich'),
-new self('Warsaw',        'Masovia',       'PL', 52.2297, 21.0122,  'Europe/Warsaw'),
-new self('Budapest',      'Budapest',      'HU', 47.4979, 19.0402,  'Europe/Budapest'),
-new self('Athens',        'Attica',        'GR', 37.9838, 23.7275,  'Europe/Athens'),
-new self('Lyon',          'Auvergne',      'FR', 45.7640,  4.8357,  'Europe/Paris'),
-new self('Hamburg',       'Hamburg',       'DE', 53.5511,  9.9937,  'Europe/Berlin'),
-new self('Manchester',    'England',       'GB', 53.4808, -2.2426,  'Europe/London'),
-new self('Edinburgh',     'Scotland',      'GB', 55.9533, -3.1883,  'Europe/London'),
-new self('Frankfurt',     'Hesse',         'DE', 50.1109,  8.6821,  'Europe/Berlin'),
-new self('Krakow',        'Lesser Poland', 'PL', 50.0647, 19.9450,  'Europe/Warsaw'),
-new self('Porto',         'Norte',         'PT', 41.1579, -8.6291,  'Europe/Lisbon'),
-new self('Naples',        'Campania',      'IT', 40.8518, 14.2681,  'Europe/Rome'),
-// Global hubs
-new self('Tokyo',         'Kanto',         'JP', 35.6762, 139.6503, 'Asia/Tokyo'),
-new self('Seoul',         'Seoul',         'KR', 37.5665, 126.9780, 'Asia/Seoul'),
-new self('Singapore',     'Singapore',     'SG',  1.3521, 103.8198, 'Asia/Singapore'),
-new self('Sydney',        'NSW',           'AU',-33.8688, 151.2093, 'Australia/Sydney'),
-new self('Melbourne',     'Victoria',      'AU',-37.8136, 144.9631, 'Australia/Melbourne'),
-new self('Dubai',         'Dubai',         'AE', 25.2048,  55.2708, 'Asia/Dubai'),
-new self('São Paulo',     'SP',            'BR',-23.5505, -46.6333, 'America/Sao_Paulo'),
-new self('Buenos Aires',  'BA',            'AR',-34.6037, -58.3816, 'America/Argentina/Buenos_Aires'),
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class City extends Model
+{
+    protected $guarded = [];
+
+    protected $casts = [
+        'latitude'  => 'float',
+        'longitude' => 'float',
+    ];
+}
 ```
 
-**Engineer note:** Verify the exact count matches the 78 anchors in `EventSeeder::CITY_ANCHORS` by coordinate. The coordinates above are transcribed directly from the seeder; do not invent additional anchors. The `EventSeeder::CITY_ANCHORS` constant can remain for backward compatibility during the transition, but the engineer should update it to delegate to `CityAnchor::all()` so there is one source.
+No relations needed from the City side in Wave 0. The model is a simple queryable wrapper over the `cities` table.
+
+### 4.3 `database/seeders/CitySeeder.php` [NEW R1]
+
+Iterates `CityAnchor::all()` and bulk-inserts into `cities`. Runs once after migrations, before `EventSeeder`. Called from `DatabaseSeeder` before `EventSeeder::class`.
+
+```php
+// Pseudocode
+$rows = array_map(fn(CityAnchor $a) => [
+    'name'      => $a->city,
+    'region'    => $a->region,
+    'country'   => $a->country,
+    'latitude'  => $a->lat,
+    'longitude' => $a->lng,
+    'timezone'  => $a->ianaTimezone,
+    'created_at'=> $now,
+    'updated_at'=> $now,
+], CityAnchor::all());
+
+DB::table('cities')->insert($rows);
+```
+
+**Engineer note:** Verify the exact row count in `CitySeeder` matches `CityAnchor::all()` count by running `City::count()` post-seed.
 
 ---
 
-## 5. Services
+## 5. Services [REVISED R1]
 
-### 5.1 `app/Services/GeocodingService.php`
-
-**Responsibility:** Given `(float $lat, float $lng)`, return the nearest `CityAnchor` (and therefore the `location_city` string).
-
-**Algorithm:** Euclidean distance on lat/lng (no haversine needed — the ±0.5° jitter means events are always within 0.7° of their anchor; Euclidean is exact enough for nearest-anchor matching in this bounded coordinate space).
+### 5.1 `app/Services/Geocoding/ReverseGeocoder.php` — Interface (port) [NEW R1]
 
 ```php
-namespace App\Services;
+namespace App\Services\Geocoding;
 
-use App\Support\CityAnchor;
+use App\Models\City;
 
-final class GeocodingService
+interface ReverseGeocoder
 {
     /**
-     * Returns the nearest CityAnchor to the given coordinates.
+     * Returns the nearest City to the given coordinates, or null if no city
+     * can be resolved (should not occur for EventSeeder-generated coordinates).
      */
-    public function nearestAnchor(float $lat, float $lng): CityAnchor
-    {
-        $anchors = CityAnchor::all();
-        $best = $anchors[0];
-        $bestDist = PHP_FLOAT_MAX;
-
-        foreach ($anchors as $anchor) {
-            $d = ($lat - $anchor->lat) ** 2 + ($lng - $anchor->lng) ** 2;
-            if ($d < $bestDist) {
-                $bestDist = $d;
-                $best = $anchor;
-            }
-        }
-
-        return $best;
-    }
-
-    /**
-     * Returns the location_city string (bare city name) for storing in DB.
-     */
-    public function cityName(float $lat, float $lng): string
-    {
-        return $this->nearestAnchor($lat, $lng)->city;
-    }
+    public function reverse(float $lat, float $lng): ?City;
 }
 ```
 
-**Container binding:** Register as a singleton in `AppServiceProvider` (78-entry loop runs at most once per request lifecycle; shared across artisan commands).
+This is the only geocoding seam. All callers (`GeocodeEventCities` command, any future service that needs city from coordinates) depend on this interface — never on a concrete class.
 
-### 5.2 `app/Services/TimezoneService.php`
+### 5.2 `app/Services/Geocoding/DatabaseReverseGeocoder.php` — Default adapter [NEW R1]
 
-**Responsibility:** Given a `location_city` string and a UNIX timestamp, return formatted event-local datetime strings for the frontend.
+**Responsibility:** Implements `ReverseGeocoder` using a bounding-box SQL query against the `cities` table + Laravel cache.
+
+**Query strategy (per DEC-011):**
 
 ```php
-namespace App\Services;
+// Δ = 5.0 degrees initial bounding box (~500 km). Widened to 20.0 then 90.0 if no result.
+$city = DB::table('cities')
+    ->whereBetween('latitude',  [$lat - $delta, $lat + $delta])
+    ->whereBetween('longitude', [$lng - $delta, $lng + $delta])
+    ->orderByRaw('((latitude - ?) * (latitude - ?) + (longitude - ?) * (longitude - ?))',
+                 [$lat, $lat, $lng, $lng])
+    ->limit(1)
+    ->first();
+```
 
-use App\Support\CityAnchor;
-use Carbon\CarbonImmutable;
+**Cache strategy:**
 
+```php
+$cacheKey = sprintf('geocoder.rev:%.2f.%.2f', round($lat, 2), round($lng, 2));
+// TTL: 86400 seconds (24 h)
+return Cache::remember($cacheKey, 86400, fn() => $this->queryNearest($lat, $lng));
+```
+
+Coordinates are rounded to 2 decimal places (~1.1 km at equator) before keying the cache. All events within the same ~1 km grid cell share one cache entry. Given EventSeeder's ±0.5° jitter around ~75 anchors, the cache warms rapidly and subsequent lookups are pure cache hits.
+
+**Container binding (AppServiceProvider):**
+
+```php
+$this->app->bind(ReverseGeocoder::class, DatabaseReverseGeocoder::class);
+```
+
+To swap in an external geocoder: change this single binding. No caller change required.
+
+### 5.3 `app/Services/TimezoneService.php` — REVISED R1
+
+`TimezoneService` no longer imports `CityAnchor`. It accepts an IANA timezone string (extracted from the resolved `City` model by the caller) rather than performing a map lookup.
+
+**Revised contract:**
+
+```php
 final class TimezoneService
 {
-    /** @return string  e.g. "America/New_York" — null only if city unknown */
-    public function ianaTimezone(string $locationCity): ?string
-    {
-        return CityAnchor::timezoneMap()[$locationCity] ?? null;
-    }
+    /**
+     * Returns formatted event-local datetime strings.
+     * $timezone is the IANA string from City->timezone (e.g. "America/New_York").
+     *
+     * @return array{starts_at_local: string, starts_at_date: string, tz_label: string,
+     *               tz_identifier: string, utc_timestamp: int}
+     */
+    public function formatEventTime(int $unixTimestamp, string $timezone): array { ... }
 
     /**
-     * Returns the event-local formatted datetime and tz abbreviation.
+     * Converts a local YYYY-MM-DD date to a UTC unix range.
+     * $timezone is the IANA string from City->timezone (or 'UTC' if no city filter).
      *
-     * @return array{starts_at_local: string, ends_at_local: string, tz_label: string, tz_identifier: string}
-     *   e.g. ['starts_at_local' => '8:00 PM', 'ends_at_local' => '11:00 PM',
-     *          'tz_label' => 'CET', 'tz_identifier' => 'Europe/Paris']
+     * @return array{0: int, 1: int}  [startUtcUnix, endUtcUnix]
      */
-    public function formatEventTime(int $createdTime, ?int $endsAt, string $locationCity): array
-    {
-        $tz = $this->ianaTimezone($locationCity) ?? 'UTC';
-        $start = CarbonImmutable::createFromTimestamp($createdTime)->setTimezone($tz);
-        $end = $endsAt ? CarbonImmutable::createFromTimestamp($endsAt)->setTimezone($tz) : null;
-
-        return [
-            'starts_at_local'  => $start->format('g:i A'),        // e.g. "8:00 PM"
-            'starts_at_date'   => $start->format('D, M j, Y'),    // e.g. "Tue, Jan 7, 2025"
-            'ends_at_local'    => $end?->format('g:i A'),
-            'tz_label'         => $start->format('T'),             // e.g. "CET", "EST"
-            'tz_identifier'    => $tz,                             // e.g. "Europe/Paris"
-            'utc_timestamp'    => $createdTime,                    // raw unix ts for JS fallback
-        ];
-    }
-
-    /**
-     * Convert a local date string (YYYY-MM-DD in event timezone) to UTC unix range.
-     * Used by EventController to translate the `from`/`to` filter.
-     *
-     * @return array{from_ts: int|null, to_ts: int|null}
-     */
-    public function localDateToUtcRange(?string $fromDate, ?string $toDate, string $locationCity): array
-    {
-        $tz = $this->ianaTimezone($locationCity) ?? 'UTC';
-        return [
-            'from_ts' => $fromDate ? CarbonImmutable::parse($fromDate, $tz)->startOfDay()->utc()->timestamp : null,
-            'to_ts'   => $toDate   ? CarbonImmutable::parse($toDate,   $tz)->endOfDay()->utc()->timestamp   : null,
-        ];
-    }
+    public function localDateToUtcRange(string $localDate, string $timezone): array { ... }
 }
 ```
 
-**Important note on date filter implementation:** Because each event can have a different timezone (based on its `location_city`), a single UTC timestamp window cannot be applied globally across events with different timezones. The practical approach for the filter: accept that date filtering uses a UTC conversion based on the **filter city** (when `?city=London` + `?from=2026-01-01`, compute the UTC range for London time). For the unfiltered case (no city), filter by UTC day boundaries (since all cities are within UTC-12 to UTC+14, a ±1 day buffer covers any event-local-day disagreement). Document this trade-off in `DECISIONS.md`. This matches AC-104-1 intent without per-row timezone computation in SQL.
+The caller resolves the `City` (via `ReverseGeocoder::reverse()` or a `City::where('name', $locationCity)->first()` lookup) and passes `$city->timezone` to these methods. No static map call anywhere in the request path.
+
+**Caller pattern (e.g. EventController):**
+
+```php
+$city = $this->reverseGeocoder->reverse($event->latitude, $event->longitude);
+$tz   = $city?->timezone ?? 'UTC';
+$formatted = $this->timezoneService->formatEventTime($event->created_time, $tz);
+```
+
+**Important note on date filter (unchanged from original):** Date filtering uses a UTC conversion based on the filter city's timezone. For the unfiltered case (no city), UTC day boundaries ±1 day buffer are applied. This matches AC-104-1 intent without per-row timezone SQL computation.
+
+### 5.4 `app/Services/GeocodingService.php` — REMOVED R1
+
+This file is deleted. The `GeocodingService` (in-memory scan via `CityAnchor::all()`) is replaced by `ReverseGeocoder` interface + `DatabaseReverseGeocoder`. PR #5 must revert/remove this file.
 
 ---
 
@@ -461,7 +491,7 @@ Event::select('id')->orderBy('id')->chunk($chunk, function ($events) use ($place
 
 ---
 
-## 8. Artisan Backfill Command
+## 8. Artisan Backfill Command [REVISED R1]
 
 **File:** `app/Console/Commands/GeocodeEventCities.php`  
 **Signature:** `events:geocode-cities {--chunk=4000 : Rows per update batch}`
@@ -469,11 +499,20 @@ Event::select('id')->orderBy('id')->chunk($chunk, function ($events) use ($place
 **Behavior:**
 1. Selects events with `location_city IS NULL` (idempotent — re-runnable)
 2. Processes in chunks of 4000
-3. For each chunk: compute `cityName(lat, lng)` per row via `GeocodingService`
-4. Issues one `DB::table('events')->whereIn('id', $ids)->update(['location_city' => $city])` per unique city in the chunk (group by nearest city, then single UPDATE per city group — minimizes DB round-trips)
-5. Reports progress to console
+3. For each chunk: resolve city via the `ReverseGeocoder` port (injected via constructor), group results by city name, issue one `DB::table('events')->whereIn('id', $ids)->update(['location_city' => $city])` per unique city per chunk
+4. Reports progress to console
 
-**Alternative grouping approach (engineer decision):** The seeder assigns one anchor per event, so each chunk of 4000 will have ~78 distinct cities but many events per city. Grouping by city and issuing one `UPDATE ... WHERE id IN (...)` per city group is more efficient than one UPDATE per row. This reduces 4000 SQL statements to ~78 per chunk.
+**ETL-specific optimization (explicit, distinct from request-time path):**
+
+The backfill command processes 1.25M events. Using the standard `DatabaseReverseGeocoder` (bbox DB query per event) would issue up to 1.25M individual queries. To avoid this, the command uses the Laravel cache, which warms rapidly:
+
+- EventSeeder jitters each event within ±0.5° of its anchor. All events near the same anchor share cache keys (coordinates rounded to 2 decimal places).
+- After the first ~75 distinct coordinate pairs are resolved and cached (one DB query each), virtually all subsequent 1.25M events hit the cache (pure memory read).
+- No special ETL-only code path is needed: the standard `DatabaseReverseGeocoder` with its cache layer already achieves this behavior.
+
+**This is NOT "loading all cities into memory on every request."** The request-time adapter issues at most one DB query per unique rounded-coordinate cache miss. The cache TTL is 24 h, so in a long-running artisan command the cache warms in the first batch and stays warm for the duration. The adapter is unchanged.
+
+**Grouping approach (unchanged from original design):** ~75 distinct cities per 4000-event chunk → ~75 UPDATE statements per chunk (vs 4000). Reduces DB round-trips by ~98%.
 
 ---
 
@@ -619,8 +658,9 @@ All new tests opt in to `RefreshDatabase` per file (matching existing pattern).
 | Test file | Covers |
 |---|---|
 | `tests/Feature/ImageStorageTest.php` | AC-101-2 (storage URL accessible), AC-101-3 (≥2 images per factory event), AC-101-5 (relation ordered by sort_order) |
-| `tests/Feature/GeocodingTest.php` | AC-102-1 (migration column exists), AC-102-2 (city derivation correct for known coordinates), AC-102-3 (no HTTP calls), AC-106-1 (all cities map to IANA tz), AC-106-2 (non-null tz for every location_city) |
+| `tests/Feature/GeocodingTest.php` [REVISED R1] | AC-102-1 (migration column exists), AC-102-2 (city derivation correct for known coordinates via `ReverseGeocoder`), AC-102-3 (no HTTP calls — `DatabaseReverseGeocoder` uses only DB), AC-106-1 (all seeded cities have non-null timezone), AC-106-2 (reverse of known anchor coordinate returns correct city + timezone); also test cache: second call with same rounded coord does NOT issue a DB query (assert query count = 1 for 2 calls at identical rounded coords) |
 | `tests/Feature/EventListingTest.php` (extend existing) | AC-103 (indexes exist — checked via `PRAGMA index_list`), AC-104-1/2/3 (date + city filters), AC-104-4 (no payload column in response) |
+| `tests/Feature/CitySeederTest.php` [NEW R1] | `cities` table row count equals `CityAnchor::all()` count after seeding; every row has non-null timezone; `City` model is queryable |
 
 ---
 
@@ -644,30 +684,36 @@ $this->call(EventImageSeeder::class);  // new — must come after EventSeeder
 
 ## 15. File Ownership Map (Wave Grouping)
 
-### Group A — New files (independent, can be created in parallel)
+### Group A — New files (independent, can be created in parallel) [REVISED R1]
 
 | File | Description | Stories |
 |---|---|---|
-| `app/Support/CityAnchor.php` | Static dataset, tz map, city list | US-102, US-106 |
-| `app/Services/GeocodingService.php` | Nearest-anchor lookup | US-102 |
-| `app/Services/TimezoneService.php` | TZ lookup + datetime formatting | US-106, US-401 |
+| `app/Support/CityAnchor.php` | Seed-data source only (existing, no runtime use after R1) | US-102 seed |
+| `app/Models/City.php` | Eloquent model for `cities` table | US-102, US-106 |
+| `app/Services/Geocoding/ReverseGeocoder.php` | Interface (port) | US-102 |
+| `app/Services/Geocoding/DatabaseReverseGeocoder.php` | Default adapter (bbox SQL + cache) | US-102 |
+| `app/Services/TimezoneService.php` | TZ formatting (revised: no CityAnchor import) | US-106, US-401 |
 | `app/Models/EventImage.php` | New model | US-101 |
 | `database/factories/EventImageFactory.php` | Test factory | US-101 |
-| `database/migrations/2026_06_18_000001_*.php` | location_city + indexes | US-102, US-103 |
+| `database/migrations/2026_06_18_000000_create_cities_table.php` | cities table + (lat,lng) index | US-102, US-106 |
+| `database/migrations/2026_06_18_000001_*.php` | location_city + indexes on events | US-102, US-103 |
 | `database/migrations/2026_06_18_000002_*.php` | event_images table | US-101 |
+| `database/seeders/CitySeeder.php` | Seeds cities from CityAnchor::all() | US-102 |
 | `database/seeders/EventImageSeeder.php` | Bulk image seeding | US-101 |
-| `app/Console/Commands/GeocodeEventCities.php` | Backfill command | US-102 |
+| `app/Console/Commands/GeocodeEventCities.php` | Backfill command (uses ReverseGeocoder port) | US-102 |
 | `storage/app/public/event-images/placeholder-0[1-8].jpg` | 8 placeholder JPEGs | US-101 |
 
-### Group B — Modified files (sequential, cannot all be parallelized due to shared file)
+**REMOVED:** `app/Services/GeocodingService.php` — deleted in R1, replaced by ReverseGeocoder port+adapter.
+
+### Group B — Modified files (sequential, cannot all be parallelized due to shared file) [REVISED R1]
 
 | File | Modification | Stories | Conflict risk |
 |---|---|---|---|
 | `app/Models/Event.php` | Add `images()`, `registrations()` relations; cast `created_time` | US-101, US-102 | LOW — single writer |
 | `app/Http/Controllers/EventController.php` | Narrow column selection; apply date/city filters | US-104 | Wave 1 only |
 | `database/factories/EventFactory.php` | Add `withCity()`, `future()` states | US-102 | LOW |
-| `database/seeders/DatabaseSeeder.php` | Add `EventImageSeeder::class` call | US-101 | LOW |
-| `app/Providers/AppServiceProvider.php` | Register `GeocodingService` singleton | US-102 | LOW |
+| `database/seeders/DatabaseSeeder.php` | Add `CitySeeder::class` (before EventSeeder) + `EventImageSeeder::class` (after EventSeeder) | US-102, US-101 | LOW |
+| `app/Providers/AppServiceProvider.php` | Bind `ReverseGeocoder::class` → `DatabaseReverseGeocoder::class` | US-102 | LOW |
 | `resources/js/pages/Events/Index.vue` | Fix typo on line 148 | US-105 | TRIVIAL |
 | `resources/js/types/index.ts` | Add `EventImage` type, extend `Event` type | US-101, US-401 | Wave 2 prep |
 
@@ -679,11 +725,13 @@ $this->call(EventImageSeeder::class);  // new — must come after EventSeeder
 
 ---
 
-## 16. Proposed New ADRs
+## 16. Proposed New ADRs [REVISED R1]
 
 | ID | Decision | Rationale |
 |---|---|---|
-| ADR-006 | `CityAnchor` class is the single source of truth for all 78 city definitions (coordinates, name, region, country, IANA tz). `EventSeeder::CITY_ANCHORS` is a transitional alias; new code imports `CityAnchor::all()`. | Eliminates duplication; services and seeders share identical data |
+| ADR-006 | [REVISED R1] `CityAnchor` class is the seeding source for the `cities` DB table. It is NOT a runtime service. New code that needs city/timezone data queries the `cities` table via `ReverseGeocoder` or `City` model. | Wrong boundary: baking a reference dataset into application code and scanning it in memory conflates data management with service logic; not replaceable without code changes |
+| ADR-006b | [NEW R1] Geocoding uses a `ReverseGeocoder` interface (port) bound to `DatabaseReverseGeocoder` (adapter). A future external geocoder requires only a new binding in `AppServiceProvider`. | Extensibility; testability (mock the port in tests); correct separation of concern |
+| ADR-006c | [NEW R1] `DatabaseReverseGeocoder` uses bbox SQL prefilter (Δ=5.0°) + ORDER BY squared distance + LIMIT 1 + Laravel cache (24 h, key = rounded-2-decimal coordinates). Never loads the full `cities` table. | SQLite has no native KNN; bbox+order-by-distance+index is pragmatic and correct; cache eliminates repeated queries for clustered event coordinates |
 | ADR-007 | `event_images` uses bigint auto-increment PK (not UUID) | Events need URL-stable UUIDs; images are internal FK children never directly addressed |
 | ADR-008 | Image seeding uses physical rows (2 per event) with recycled short path strings. No deterministic derivation. | Preserves relational model, supports AC-101-5 Eloquent relation, allows future unique images without schema change |
 | ADR-009 | Date filtering converts user-supplied local date to UTC unix range server-side; SQLite index on `created_time` is preserved. When no city filter is provided, UTC day boundaries ±1 day buffer are used. | Avoids per-row timezone function in SQL; keeps index-backed query |

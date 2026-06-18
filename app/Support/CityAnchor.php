@@ -104,32 +104,4 @@ final class CityAnchor
             new self('Buenos Aires', 'BA', 'AR', -34.6037, -58.3816, 'America/Argentina/Buenos_Aires'),
         ];
     }
-
-    /**
-     * Returns a map of city name => IANA timezone identifier.
-     *
-     * @return array<string, string>
-     */
-    public static function timezoneMap(): array
-    {
-        $map = [];
-        foreach (self::all() as $anchor) {
-            $map[$anchor->city] = $anchor->ianaTimezone;
-        }
-
-        return $map;
-    }
-
-    /**
-     * Returns a sorted list of all city names, suitable for filter dropdowns.
-     *
-     * @return list<string>
-     */
-    public static function cityNames(): array
-    {
-        $names = array_map(static fn (self $a): string => $a->city, self::all());
-        sort($names);
-
-        return $names;
-    }
 }
