@@ -1,6 +1,6 @@
 # TASK-2 — Work Plan: Scope & User Stories
 
-**Status:** in_review (PR open on feat/us-002)
+**Status:** ✓ MERGED (PR #3)
 **Created:** 2026-06-18
 **User Story:** US-002 — Define scope and break the coding test into user stories
 

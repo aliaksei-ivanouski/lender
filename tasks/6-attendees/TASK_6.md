@@ -1,6 +1,6 @@
 # TASK-6 — Wave 3: Attendees & Confirmation Email
 
-**Status:** in_progress
+**Status:** ✓ MERGED (PR #10 + #11)
 **Created:** 2026-06-18
 **User Stories:** US-301 (attendee registration + list), US-302 (confirmation email), US-203 (event detail page as the registration home)
 
@@ -10,7 +10,7 @@ Let authenticated users register interest/attendance for an event (an attendee l
 ## Phases
 | Phase | Status | Output |
 |---|---|---|
-| Design | in_progress | ARCHITECTURE.md |
-| Planning | pending | PLANNING.md |
-| Implementation | pending | IMPLEMENTATION.md |
-| QA | pending | — |
+| Design | ✓ completed | ARCHITECTURE.md |
+| Planning | ✓ completed | PLANNING.md |
+| Implementation | ✓ completed | IMPLEMENTATION.md |
+| QA | ✓ completed | — |

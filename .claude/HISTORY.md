@@ -82,9 +82,9 @@ _Last updated: 2026-06-18_
   - Archive: `tasks/3-data-foundation/`
 
 ## Task 2: Scope & User Stories (Business Analysis)
-- **Branch**: `feat/us-002` (in_review)
+- **Branch**: `feat/us-002` (merged)
 - **Completed**: 2026-06-18
-- **Status**: FINAL BRS, PR pending merge
+- **Status**: MERGED (PR #3)
 - **Deliverables**:
   - `tasks/2-scope-and-user-stories/BUSINESS_ANALYSIS.md` — authoritative backlog
   - 18 user stories (US-101..106, US-201..203, US-301..305, US-401..402)

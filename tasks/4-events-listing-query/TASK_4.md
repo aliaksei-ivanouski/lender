@@ -1,6 +1,6 @@
 # TASK-4 — US-104: Events Listing Query + Date & Location Filters
 
-**Status:** in_progress
+**Status:** ✓ MERGED (PR #8)
 **Created:** 2026-06-18
 **User Story:** US-104 — Fix and extend the events listing query (apply date filter, add location filter, enriched response, performant at scale)
 
@@ -10,5 +10,5 @@ Fix the never-applied `from` date filter and add date-range + location filtering
 ## Phases
 | Phase | Status | Output |
 |---|---|---|
-| Implementation | in_progress | EventController, EventResource, Index.vue |
-| QA | in_progress | EventListingTest |
+| Implementation | ✓ completed | EventController, EventResource, Index.vue |
+| QA | ✓ completed | EventListingTest |

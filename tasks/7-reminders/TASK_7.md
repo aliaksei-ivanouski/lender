@@ -1,6 +1,6 @@
 # TASK-7 — Wave 4: Scheduler + Reminder Emails
 
-**Status:** in_progress
+**Status:** ✓ MERGED (PR #12)
 **Created:** 2026-06-18
 **User Stories:** US-303 (scheduler setup), US-304 (3-day reminder), US-305 (24-hour reminder)
 
@@ -10,7 +10,7 @@ Send reminder emails to event attendees as the event approaches: 3 days before A
 ## Phases
 | Phase | Status | Output |
 |---|---|---|
-| Design | in_progress | ARCHITECTURE.md |
-| Planning | pending | PLANNING.md |
-| Implementation | pending | IMPLEMENTATION.md |
-| QA | pending | — |
+| Design | ✓ completed | ARCHITECTURE.md |
+| Planning | ✓ completed | PLANNING.md |
+| Implementation | ✓ completed | IMPLEMENTATION.md |
+| QA | ✓ completed | — |
