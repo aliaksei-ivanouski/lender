@@ -49,23 +49,50 @@ confirmation and reminder emails — all on top of the existing Laravel 13 start
 
 ## Quick Start — Local (Primary)
 
-### Option A — one-liner setup
+### One command — recommended
 
 ```bash
-# 1. Install all PHP + JS deps, copy .env, generate key, run migrations, build assets
-composer setup
+./bin/setup        # or equivalently: composer setup
+```
 
-# 2. Create the SQLite database file if it does not already exist
-touch database/database.sqlite
+Then start the app:
 
-# 3. Seed the database — see the seed-size warning below before running the default
-php artisan db:seed
+```bash
+php artisan serve
+# open http://127.0.0.1:8000/events-visual-1
+```
 
-# 4. Start all dev processes (server + queue + log tail + Vite HMR) concurrently
+For HMR development (server + queue + log tail + Vite all at once):
+
+```bash
 composer dev
 ```
 
-### Option B — manual step-by-step
+**What `./bin/setup` does (all steps are idempotent — safe to re-run):**
+
+1. Installs PHP dependencies (`composer install`) if `vendor/` is missing.
+2. Copies `.env.example` → `.env` if `.env` is missing.
+3. Generates `APP_KEY` only if not already set (never regenerates an existing key).
+4. Touches `database/database.sqlite` if it does not exist.
+5. Installs JS dependencies using a modern npm. If the machine's global `npm` is older than v7
+   (e.g. npm 6 ships with some older Node distributions), the script automatically invokes
+   `npx npm@latest` instead — this preserves `lockfileVersion 3` and avoids silent Vite failures.
+6. Builds frontend assets via `npx vite build` (works regardless of local npm version).
+7. Runs `php artisan migrate --force` (idempotent).
+8. Seeds **2,000 events** by default — small and fast. Override with `SEED_ROWS`:
+   ```bash
+   SEED_ROWS=5000 ./bin/setup
+   ```
+9. Runs `php artisan events:geocode-cities` to backfill human-readable city names.
+10. Creates the storage symlink (`php artisan storage:link`) for locally served images.
+
+> **Default seed size:** `./bin/setup` seeds only 2,000 events. The default when running
+> `php artisan db:seed` directly (without `SEED_ROWS`) is 1,250,000 rows (~2.5 GB). Always
+> use `./bin/setup` or `SEED_ROWS=N php artisan db:seed` for local/review use.
+
+### Manual / step-by-step
+
+If you prefer to run each step yourself:
 
 ```bash
 composer install
@@ -78,38 +105,32 @@ touch database/database.sqlite
 
 php artisan migrate
 
-# See seed-size warning below
-php artisan db:seed
+# Seed a small dataset (default is 1.25M rows — always specify SEED_ROWS locally)
+SEED_ROWS=2000 php artisan db:seed
 
-npm install
-npm run dev        # Vite HMR for development
-# or
-npm run build      # production build
+# Backfill city names for event addresses
+php artisan events:geocode-cities
+
+# Symlink storage for locally served images
+php artisan storage:link
+
+# Build frontend assets (use npx vite build to avoid issues with npm < 7)
+npx vite build
+# or for Vite HMR during development:
+npx vite
 ```
 
-### Seed-size warning
-
-The default seed is **1,250,000 events**, producing a roughly **2.5 GB SQLite file** and taking
-several minutes to write. For evaluation or development, seed a much smaller dataset:
+To seed a different size:
 
 ```bash
-# ~5,000 rows, fast — recommended for reviewers
+# ~5,000 rows — recommended for reviewers
 SEED_ROWS=5000 php artisan db:seed
 
-# Run it again cleanly (truncate first)
+# Start fresh
 php artisan migrate:fresh && SEED_ROWS=5000 php artisan db:seed
 ```
 
 `SEED_ROWS` is read directly by `EventSeeder` (`database/seeders/EventSeeder.php:67`).
-
-### Storage symlink (needed once images are implemented)
-
-```bash
-php artisan storage:link
-```
-
-This maps `public/storage` → `storage/app/public` for locally served event images.
-The feature is not yet built; run this command once it lands.
 
 ---
 
@@ -154,7 +175,7 @@ This starts four concurrent processes:
 | `php artisan serve --host=localhost` | App at **http://localhost:8000** |
 | `php artisan queue:listen --tries=1 --timeout=0` | Processes queued jobs (emails) |
 | `php artisan pail --timeout=0` | Live log tail (see emails in `MAIL_MAILER=log`) |
-| `npm run dev` | Vite HMR dev server |
+| `npx vite` | Vite HMR dev server (avoids npm < 7 issue) |
 
 ### Key routes
 
@@ -312,7 +333,7 @@ See `tasks/1-codebase-research/RESEARCH.md` for the full audit including all kno
 |---|---|---|
 | **Visual page 1** (distinct layout A) | Not yet built | Card grid or timeline layout; Tailwind v4 + reka-ui components; infinite scroll or paginated load; date/location filters wired to backend |
 | **Visual page 2** (distinct layout B) | Not yet built | Meaningfully different from page 1 (e.g. map view or calendar); same data pipeline |
-| **Images (2+ per event, local)** | Not yet built | New `event_images` table; `public` disk + `storage:link`; seed with shared placeholder files to avoid bloating the DB |
+| **Images (2+ per event, local)** | Not yet built | New `event_images` table; `public` disk + `storage:link`; seed with 8 real PNGs from `database/seeders/images/` (1.png–8.png), two deterministically selected per event |
 | **Addresses from lat/lng** | Not yet built | Precompute city from nearest `CITY_ANCHORS` (offline, fast, matches seeder clustering); store denormalized; do not geocode per request at 1.25M-row scale |
 | **Date/time + timezones** | Not yet built | Display in UTC or derive from coordinates; no JS date lib currently installed — one will be added (dayjs or date-fns) |
 | **Date + location filtering** | Not yet built (date filter plumbed but ignored server-side) | Add `created_time` index; add backend query logic for date range and location/city; fix known `aplyFilters` typo in `Events/Index.vue:148` |

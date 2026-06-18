@@ -41,7 +41,7 @@ class EventImageSeeder extends Seeder
         Storage::disk('public')->makeDirectory('event-images');
 
         for ($n = 1; $n <= self::PLACEHOLDER_COUNT; $n++) {
-            $filename = sprintf('placeholder-%02d.jpg', $n);
+            $filename = $n.'.png';
             $source = database_path('seeders/images/'.$filename);
             $destination = 'event-images/'.$filename;
 
@@ -53,7 +53,7 @@ class EventImageSeeder extends Seeder
             }
         }
 
-        $this->command->info('Copied 8 placeholder images to public disk.');
+        $this->command->info('Copied 8 images to public disk.');
     }
 
     private function insertImages(): void
@@ -62,7 +62,7 @@ class EventImageSeeder extends Seeder
 
         $now = date('Y-m-d H:i:s');
 
-        Event::query()->select('id')->chunkById(self::CHUNK, function ($events) use ($now) {
+        Event::query()->whereDoesntHave('images')->select('id')->chunkById(self::CHUNK, function ($events) use ($now) {
             $batch = [];
 
             foreach ($events as $event) {
@@ -73,7 +73,7 @@ class EventImageSeeder extends Seeder
 
                 $batch[] = [
                     'event_id' => $event->id,
-                    'path' => sprintf('event-images/placeholder-%02d.jpg', $firstIndex),
+                    'path' => 'event-images/'.$firstIndex.'.png',
                     'sort_order' => 0,
                     'alt' => 'Event image 1',
                     'created_at' => $now,
@@ -82,7 +82,7 @@ class EventImageSeeder extends Seeder
 
                 $batch[] = [
                     'event_id' => $event->id,
-                    'path' => sprintf('event-images/placeholder-%02d.jpg', $secondIndex),
+                    'path' => 'event-images/'.$secondIndex.'.png',
                     'sort_order' => 1,
                     'alt' => 'Event image 2',
                     'created_at' => $now,

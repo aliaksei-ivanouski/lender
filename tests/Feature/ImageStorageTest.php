@@ -22,13 +22,13 @@ it('Event->images() returns a collection ordered by sort_order (AC-101-5)', func
 
     EventImage::factory()->create([
         'event_id' => $event->id,
-        'path' => 'event-images/placeholder-02.jpg',
+        'path' => 'event-images/2.png',
         'sort_order' => 1,
     ]);
 
     EventImage::factory()->create([
         'event_id' => $event->id,
-        'path' => 'event-images/placeholder-01.jpg',
+        'path' => 'event-images/1.png',
         'sort_order' => 0,
     ]);
 
@@ -47,14 +47,14 @@ it('EventImage url accessor returns a string containing the path (AC-101-2)', fu
 
     $image = EventImage::factory()->create([
         'event_id' => $event->id,
-        'path' => 'event-images/placeholder-01.jpg',
+        'path' => 'event-images/1.png',
         'sort_order' => 0,
     ]);
 
     $url = $image->url;
 
     expect($url)->toBeString()
-        ->and($url)->toContain('event-images/placeholder-01.jpg');
+        ->and($url)->toContain('event-images/1.png');
 });
 
 it('Event factory with 2 EventImage children yields exactly 2 images (AC-101-5)', function () {

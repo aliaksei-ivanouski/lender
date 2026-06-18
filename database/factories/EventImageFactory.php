@@ -19,7 +19,7 @@ class EventImageFactory extends Factory
 
         return [
             'event_id' => Event::factory(),
-            'path' => sprintf('event-images/placeholder-%02d.jpg', $index),
+            'path' => 'event-images/'.$index.'.png',
             'sort_order' => 0,
             'alt' => 'Event image '.$index,
         ];

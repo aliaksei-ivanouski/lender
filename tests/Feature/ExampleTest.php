@@ -9,10 +9,10 @@ class ExampleTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_home_redirects_to_the_events_listing()
+    public function test_home_redirects_to_events_visual_1()
     {
         $response = $this->get(route('home'));
 
-        $response->assertRedirect(route('events.index'));
+        $response->assertRedirect(route('events.visual1'));
     }
 }

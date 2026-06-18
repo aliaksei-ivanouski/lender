@@ -40,3 +40,23 @@ export interface EventListItem {
  * Event resource interface — may be used as an alias or extension point
  */
 export type Event = EventListItem;
+
+/**
+ * EventFilters interface — filter parameters for the event listing
+ * @see useEventsData composable
+ */
+export interface EventFilters {
+  status: string | null;
+  from: string | null;
+  to: string | null;
+  location_city: string | null;
+}
+
+/**
+ * DateBounds interface — dataset event date range from the backend
+ * min/max are ISO 'YYYY-MM-DD' strings
+ */
+export interface DateBounds {
+  min: string;
+  max: string;
+}

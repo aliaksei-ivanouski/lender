@@ -10,16 +10,6 @@ use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
 
-it('renders the events listing shell without authentication', function () {
-    $this->get(route('events.index'))
-        ->assertOk()
-        ->assertInertia(fn ($page) => $page
-            ->component('Events/Index')
-            ->has('statuses', 4)
-            ->where('filters.from', '2023-01-01')
-        );
-});
-
 it('returns a json page of events with load stats for lazy loading', function () {
     $user = User::factory()->create(['name' => 'Ada Lovelace']);
     Event::factory()->for($user)->create([
@@ -76,6 +66,47 @@ it('renders the two visualization pages and the dashboard without authentication
     $this->get(route('events.visual1'))->assertOk();
     $this->get(route('events.visual2'))->assertOk();
     $this->get(route('dashboard'))->assertOk();
+});
+
+it('visual-1 page renders VisualOne component with shared listing props', function () {
+    $this->get(route('events.visual1'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Events/VisualOne')
+            ->has('filters')
+            ->has('filters.status')
+            ->has('filters.from')
+            ->has('filters.to')
+            ->has('filters.location_city')
+            ->has('statuses', 4)
+            ->has('cities')
+        );
+});
+
+it('visual-2 page renders VisualTwo component with shared listing props', function () {
+    $this->get(route('events.visual2'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Events/VisualTwo')
+            ->has('filters')
+            ->has('filters.status')
+            ->has('filters.from')
+            ->has('filters.to')
+            ->has('filters.location_city')
+            ->has('statuses', 4)
+            ->has('cities')
+        );
+});
+
+it('visual pages pass query string filters into inertia props', function () {
+    $this->get(route('events.visual1', ['status' => 'published', 'from' => '2025-01-01', 'location_city' => 'London']))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Events/VisualOne')
+            ->where('filters.status', 'published')
+            ->where('filters.from', '2025-01-01')
+            ->where('filters.location_city', 'London')
+        );
 });
 
 // ─── Index existence assertions (AC-103) ──────────────────────────────────────
@@ -256,6 +287,51 @@ it('EventResource returns event-local timezone fields when city is seeded (US-40
         ->assertJsonPath('data.0.utc_timestamp', 0);
 });
 
+// ─── US-005: dateBounds prop tests ────────────────────────────────────────────
+
+it('visual-1 page exposes dateBounds prop when events exist', function () {
+    $user = User::factory()->create();
+
+    // Earlier event: 2024-03-15 UTC
+    Event::factory()->for($user)->create(['created_time' => mktime(0, 0, 0, 3, 15, 2024)]);
+    // Later event: 2025-11-20 UTC
+    Event::factory()->for($user)->create(['created_time' => mktime(0, 0, 0, 11, 20, 2025)]);
+
+    $this->get(route('events.visual1'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Events/VisualOne')
+            ->has('dateBounds')
+            ->where('dateBounds.min', '2024-03-15')
+            ->where('dateBounds.max', '2025-11-20')
+        );
+});
+
+it('visual-2 page exposes dateBounds prop when events exist', function () {
+    $user = User::factory()->create();
+
+    Event::factory()->for($user)->create(['created_time' => mktime(0, 0, 0, 3, 15, 2024)]);
+    Event::factory()->for($user)->create(['created_time' => mktime(0, 0, 0, 11, 20, 2025)]);
+
+    $this->get(route('events.visual2'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Events/VisualTwo')
+            ->has('dateBounds')
+            ->where('dateBounds.min', '2024-03-15')
+            ->where('dateBounds.max', '2025-11-20')
+        );
+});
+
+it('visual pages return null dateBounds when no events exist', function () {
+    $this->get(route('events.visual1'))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->component('Events/VisualOne')
+            ->where('dateBounds', null)
+        );
+});
+
 it('EventResource cover_image_url resolves to the lowest sort_order image url', function () {
     $user = User::factory()->create();
     $event = Event::factory()->for($user)->create(['status' => 'published']);
@@ -268,17 +344,4 @@ it('EventResource cover_image_url resolves to the lowest sort_order image url', 
 
     $coverUrl = $response->json('data.0.cover_image_url');
     expect($coverUrl)->toContain('placeholder-01.jpg');
-});
-
-it('index page includes cities list for location filter dropdown', function () {
-    $this->seed(CitySeeder::class);
-
-    $this->get(route('events.index'))
-        ->assertOk()
-        ->assertInertia(fn ($page) => $page
-            ->component('Events/Index')
-            ->has('cities')
-            ->has('filters.location_city')
-            ->has('filters.to')
-        );
 });
