@@ -126,7 +126,7 @@ onMounted(async () => {
 
     // leaflet.markercluster augments the L namespace after the side-effect import above.
     // @types/leaflet.markercluster declares L.MarkerClusterGroup on the leaflet module.
-    clusterGroup = new L.MarkerClusterGroup();
+    clusterGroup = new L.MarkerClusterGroup({ showCoverageOnHover: false });
     map.addLayer(clusterGroup);
 
     mapReady.value = true;
