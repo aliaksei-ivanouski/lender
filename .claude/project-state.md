@@ -1,6 +1,6 @@
 # Project State — Index (Tier 1)
 _Last updated: 2026-06-18_
-_Updated after: codebase-research_
+_Updated after: TASK-1 archived (merged), TASK-2 analysis complete_
 
 **Events Visuals** — Laravel 13 + Vue 3 Inertia starter-kit with large seeded dataset (1.25M events, 3000 users).
 Build target: `Events/VisualOne.vue` + `Events/VisualTwo.vue` (empty stubs) + image support + filtering + attendee registration + reminder emails.
@@ -33,7 +33,7 @@ Build target: `Events/VisualOne.vue` + `Events/VisualTwo.vue` (empty stubs) + im
 
 | Task | Status | Blocked By | Branch | Detail |
 |---|---|---|---|---|
-| TASK-1 | 🔄 in review / PR open | none | `feat/us-001` | Codebase research complete; project-state files being created |
+| TASK-2 | in_review | none | `feat/us-002` | Business analysis complete; 18 user stories (US-101..106, US-201..203, US-301..305, US-401..402); 6-wave plan; BRS final |
 
 ---
 
@@ -76,6 +76,13 @@ Build target: `Events/VisualOne.vue` + `Events/VisualTwo.vue` (empty stubs) + im
 - **images_serving**: always serve from `storage/app/public` → URL `/storage/...`, never hotlink external URLs
 
 ---
+
+## Backlog & Requirements
+
+**Authoritative source**: `tasks/2-scope-and-user-stories/BUSINESS_ANALYSIS.md`
+- 18 user stories across 6 implementation waves
+- 5 locked architectural decisions (ADR-001 through ADR-005)
+- Scope: images, location geocoding, timezone handling, attendee registration, reminders
 
 ## Tier-2 Files
 
