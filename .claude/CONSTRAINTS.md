@@ -8,7 +8,7 @@ _Last updated: 2026-06-18_
 
 | Constraint | Resolution | ADR | Status |
 |---|---|---|---|
-| Address/location derivation strategy | Offline nearest-CITY_ANCHOR mapping; store in `location_city` column | ADR-001 | ✓ RESOLVED |
+| Address/location derivation strategy | Reference data in `cities` DB table (name, region, country, lat, lng, timezone), seeded from CityAnchor; `ReverseGeocoder` interface w/ `DatabaseReverseGeocoder` default; bounded SQL query + 24h coordinate cache | ADR-010/011/012 | ✓ RESOLVED |
 | Attendee registration auth model | Authenticated-only via Fortify; `event_registrations(user_id FK, event_id FK, unique)` | ADR-002 | ✓ RESOLVED |
 | Timezone display strategy | Event-local via static CITY_ANCHOR→IANA map (~78 entries); TZ label shown; date filtering on event-local date | ADR-004 | ✓ RESOLVED |
 | Image strategy | 5–10 local placeholders in repo; `event_images` table; bulk seeding; served via `storage/app/public` | ADR-005 | ✓ RESOLVED |
@@ -34,6 +34,11 @@ _Last updated: 2026-06-18_
 ---
 
 ## Data Model Quirks (Reference — already catalogued in Wave 1)
+
+### CityAnchor PHP class: seed-data source only (ADR-010/011/012 — Revision R1)
+- **Detail**: Historical `CityAnchor` class contained ~78 hardcoded city anchors (name, lat, lng, timezone). Previously loaded into memory at runtime; now (R1) demoted to seed-data source only.
+- **Impact**: Reference data is now in a queryable `cities` DB table (indexed on lat/lng), not in-memory PHP class. Timezone mapping also stored in DB rather than static map.
+- **Reference**: Full R1 design detail in tasks/3-data-foundation/ARCHITECTURE.md (ADR-010/011/012 sections).
 
 ### `created_time` is event START time, not creation timestamp
 - **Detail**: Column `created_time` holds a UNIX timestamp that IS the event start time (not `created_at`).

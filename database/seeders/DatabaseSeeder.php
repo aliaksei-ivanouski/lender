@@ -20,6 +20,8 @@ class DatabaseSeeder extends Seeder
             'email' => 'test@example.com',
         ]);
 
+        $this->call(CitySeeder::class);
+
         // Defaults to 1,250,000 events (≈2.5 GB; ~3s first listing load on a
         // laptop). Override with SEED_ROWS, e.g. SEED_ROWS=50000 php artisan db:seed
         $this->call(EventSeeder::class);
