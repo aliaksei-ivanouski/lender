@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\EventResource;
+use App\Models\City;
 use App\Models\Event;
+use App\Services\TimezoneService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,8 +20,11 @@ class EventController extends Controller
             'filters' => [
                 'status' => $request->status,
                 'from' => $request->input('from', '2023-01-01'),
+                'to' => $request->input('to'),
+                'location_city' => $request->input('location_city'),
             ],
             'statuses' => ['draft', 'published', 'cancelled', 'sold_out'],
+            'cities' => City::orderBy('name')->pluck('name'),
         ]);
     }
 
@@ -27,7 +33,7 @@ class EventController extends Controller
         [$events, $stats] = $this->loadListing($request);
 
         return response()->json([
-            'data' => $events->items(),
+            'data' => EventResource::collection($events->items()),
             'current_page' => $events->currentPage(),
             'last_page' => $events->lastPage(),
             'total' => $events->total(),
@@ -51,8 +57,36 @@ class EventController extends Controller
     {
         $start = microtime(true);
 
-        $events = Event::with('user')
+        /** @var TimezoneService $tzService */
+        $tzService = app(TimezoneService::class);
+
+        $locationCity = $request->input('location_city');
+
+        // Resolve city timezone for event-local date filtering when a city is selected.
+        $cityTimezone = null;
+        if ($locationCity) {
+            $cityTimezone = City::where('name', $locationCity)->value('timezone');
+        }
+
+        $query = Event::with(['user', 'city', 'coverImage'])
             ->when($request->status, fn ($q, $s) => $q->where('status', $s))
+            ->when($locationCity, fn ($q, $c) => $q->where('location_city', $c));
+
+        // Apply `from` date filter: convert local date to UTC range boundary.
+        $from = $request->input('from');
+        if ($from) {
+            [$fromStart] = $tzService->localDateToUtcRange($from, $cityTimezone);
+            $query->where('created_time', '>=', $fromStart);
+        }
+
+        // Apply `to` date filter: convert local date to UTC range boundary.
+        $to = $request->input('to');
+        if ($to) {
+            [, $toEnd] = $tzService->localDateToUtcRange($to, $cityTimezone);
+            $query->where('created_time', '<=', $toEnd);
+        }
+
+        $events = $query
             ->orderByDesc('created_time')
             ->paginate(50)
             ->withQueryString();
