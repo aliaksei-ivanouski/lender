@@ -57,8 +57,8 @@ it('shows an event detail page with its payload', function () {
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->component('Events/Show')
-            ->where('event.id', $event->id)
-            ->where('event.payload.name', 'Global Tech Summit')
+            ->where('event.id', (string) $event->id)
+            ->where('event.name', 'Global Tech Summit')
         );
 });
 

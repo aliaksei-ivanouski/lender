@@ -1,6 +1,6 @@
 # Project State — Index (Tier 1)
 _Last updated: 2026-06-18_
-_Updated after: TASK-3 data foundation merged (PR #7)_
+_Updated after: TASK-5 (Wave 2 visual pages) merged + TASK-4 (Wave 1 events listing) merged_
 
 **Events Visuals** — Laravel 13 + Vue 3 Inertia starter-kit with large seeded dataset (1.25M events, 3000 users).
 Build target: `Events/VisualOne.vue` + `Events/VisualTwo.vue` (empty stubs) + image support + filtering + attendee registration + reminder emails.
@@ -22,7 +22,7 @@ Build target: `Events/VisualOne.vue` + `Events/VisualTwo.vue` (empty stubs) + im
 |---|---|---|
 | **Dev** | `composer dev` (serve + queue:listen + pail + vite dev) | — |
 | **Setup** | `composer setup` (install + key + migrate + seed + npm build) | — |
-| **Test** | `composer test` (config:clear + pint + phpstan + artisan test) | 62 passing (Pest, in-memory SQLite) |
+| **Test** | `composer test` (config:clear + pint + phpstan + artisan test) | 74 passing (Pest, in-memory SQLite) |
 | **Lint** | `composer lint` (pint) | — |
 | **Types** | `composer types:check` (phpstan L7) + `npm run types:check` (vue-tsc) | — |
 | **Build** | `npm run build` (Vite + Tailwind) | — |
@@ -31,7 +31,7 @@ Build target: `Events/VisualOne.vue` + `Events/VisualTwo.vue` (empty stubs) + im
 
 ## Active Tasks
 
-*None in progress. TASK-4 will be added when Wave 1 begins.*
+*None in progress. Wave 3 (attendees & emails) will begin when next scheduled.*
 
 ---
 

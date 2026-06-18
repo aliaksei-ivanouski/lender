@@ -67,5 +67,19 @@ class Event extends Model
         return $this->hasOne(EventImage::class)->ofMany('sort_order', 'min');
     }
 
-    // TODO Wave-3: EventRegistration model — add registrations() HasMany relation here
+    /**
+     * @return HasMany<EventRegistration, $this>
+     */
+    public function registrations(): HasMany
+    {
+        return $this->hasMany(EventRegistration::class);
+    }
+
+    /**
+     * Count of confirmed registrations.
+     */
+    public function getAttendeesCountAttribute(): int
+    {
+        return $this->registrations()->where('status', 'confirmed')->count();
+    }
 }

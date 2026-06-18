@@ -1,7 +1,7 @@
 # Established Coding Patterns
 
 _Last updated: 2026-06-18_
-_Updated after: TASK-3 (Wave 0, data foundation)_
+_Updated after: TASK-5 (Wave 2, visual pages) merged_
 
 ---
 
@@ -148,11 +148,182 @@ public function test_reverse_geocoder_finds_nearest_city() {
 
 ---
 
+## Frontend: Shared Events Data & Filtering Composable
+
+**Pattern**: Centralized fetch, filter, and paginate logic extracted to `resources/js/composables/useEventsData.ts`.
+
+```typescript
+// resources/js/composables/useEventsData.ts
+export function useEventsData() {
+  const filters = ref({ dateFrom: null, dateTo: null, locationCity: null });
+  const events = ref([]);
+  const loading = ref(false);
+  const hasMore = ref(true);
+  const page = ref(1);
+
+  const loadEvents = async () => {
+    loading.value = true;
+    const response = await route('event.list', { page: page.value, ...filters.value });
+    events.value = [...events.value, ...response.data];
+    hasMore.value = response.links.next !== null;
+    page.value += 1;
+    loading.value = false;
+  };
+
+  const applyFilters = () => {
+    events.value = [];
+    page.value = 1;
+    loadEvents();
+  };
+
+  const loadAll = async () => {
+    while (hasMore.value && events.value.length < 2000) {
+      await loadEvents();
+    }
+  };
+
+  return { filters, events, loading, hasMore, applyFilters, loadEvents, loadAll };
+}
+```
+
+**Use case**: Both `EventsVisualOne.vue` (card grid) and `EventsVisualTwo.vue` (map) use this composable. Card grid renders all loaded events; map uses viewport-synced windowing of the list.
+
+---
+
+## Frontend: Date Picker Component (en-US, Bounded, Teleported)
+
+**Pattern**: reka-ui + shadcn-vue date-picker with en-US localization, min/max bounds, calendar teleport, and keyboard-only focus styling.
+
+```vue
+<!-- resources/js/components/ui/date-picker/index.vue -->
+<script setup lang="ts">
+import { ref } from 'vue';
+import { Calendar, X } from 'lucide-vue-next';
+import { format } from 'date-fns';
+import enUS from 'date-fns/locale/en-US';
+
+const props = defineProps<{ modelValue?: Date; min?: Date; max?: Date }>();
+const emit = defineEmits<{ 'update:modelValue': [Date] }>();
+
+const isOpen = ref(false);
+
+const handleSelect = (date: Date) => {
+  emit('update:modelValue', date);
+  isOpen.value = false; // close on select
+};
+
+const isDateDisabled = (date: Date) => {
+  if (props.min && date < props.min) return true;
+  if (props.max && date > props.max) return true;
+  return false;
+};
+</script>
+
+<template>
+  <div class="relative">
+    <button @click="isOpen = !isOpen" class="focus:ring-2 ring-blue-400/30">
+      {{ props.modelValue ? format(props.modelValue, 'MM/dd/yyyy', { locale: enUS }) : 'Select date' }}
+    </button>
+    <Teleport to="body" v-if="isOpen">
+      <div class="fixed inset-0 z-50 flex items-center justify-center">
+        <Calendar :min="min" :max="max" :disabled="isDateDisabled" @select="handleSelect" />
+      </div>
+    </Teleport>
+  </div>
+</template>
+```
+
+**Use case**: Event list filters (Visual 1 & 2) use this picker for dateFrom/dateTo. Teleport ensures calendar sits above map; bounds prevent invalid date selection; MM/DD/YYYY matches en-US convention.
+
+---
+
+## Frontend: Leaflet Map with Marker Clustering & Viewport Sync
+
+**Pattern**: Dynamic import + lazy-init + viewport-change event syncs list pagination.
+
+```typescript
+// resources/js/components/EventsVisualTwo.vue
+import { defineAsyncComponent, ref, onMounted, watch } from 'vue';
+import L from 'leaflet';
+import 'leaflet.markercluster';
+
+const mapContainer = ref(null);
+let mapInstance = null;
+const mapBounds = ref(null);
+
+onMounted(async () => {
+  // Lazy-load map library
+  const LeafletMap = defineAsyncComponent(() => import('leaflet/dist/leaflet.css'));
+  
+  mapInstance = L.map(mapContainer.value).setView([20, 0], 2);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapInstance);
+  
+  const markerCluster = L.markerClusterGroup();
+  events.value.forEach(event => {
+    const marker = L.marker([event.latitude, event.longitude])
+      .bindPopup(event.name);
+    markerCluster.addLayer(marker);
+  });
+  mapInstance.addLayer(markerCluster);
+
+  mapInstance.on('moveend', () => {
+    mapBounds.value = mapInstance.getBounds();
+    // Filter list to events within bounds + load next page
+    const visibleEvents = events.value.filter(e =>
+      mapBounds.value.contains([e.latitude, e.longitude])
+    );
+    loadNextPage();
+  });
+});
+```
+
+**Use case**: Visual 2 renders 2000-event cap (all on load; viewport event listeners filter display in side list). Marker clustering prevents pin overlap; dynamic import keeps bundle size lean.
+
+---
+
+## Frontend: Status Humanizer (Utility)
+
+**Pattern**: Format enum status values to readable labels.
+
+```typescript
+// resources/js/lib/format.ts
+export function formatStatus(status: string): string {
+  const labels: Record<string, string> = {
+    'draft': 'Draft',
+    'scheduled': 'Scheduled',
+    'ongoing': 'In Progress',
+    'completed': 'Completed',
+    'cancelled': 'Cancelled',
+  };
+  return labels[status] ?? 'Unknown';
+}
+```
+
+**Use case**: Event list rendering; attendee status display in later waves.
+
+---
+
+## Backend: One-Command Setup (bin/setup)
+
+**Pattern**: Single entry point for fresh environment setup — install, migrate, seed, build.
+
+```bash
+#!/bin/bash
+# bin/setup
+composer install
+php artisan key:generate --force
+php artisan migrate:fresh --seed
+npm install && npm run build
+echo "✓ Setup complete"
+```
+
+**Use case**: New developers run `./bin/setup` once; idempotent (safe to re-run). Logs setup noise via `2>/dev/null` for clean output.
+
+---
+
 ## Conventions to Establish in Later Waves
 
-1. **Component organization**: where to place modal/filter components, layout wrappers, etc.
-2. **API contracts**: resource/collection structures returned from `EventController`; attendee API shape
-3. **Image serving**: how to reference `storage/app/public` files in Vue templates (URL path structure)
-4. **JSON payload decoding**: where and when to `JSON.parse(event.payload)` in Vue vs. backend
-5. **Email queueing**: how confirmation + reminder jobs are dispatched and structured
-6. **Filtering patterns**: how filters modify query state + API calls + component re-renders
+1. **API contracts**: resource/collection structures returned from `EventController`; attendee API shape
+2. **JSON payload decoding**: where and when to `JSON.parse(event.payload)` in Vue vs. backend
+3. **Email queueing**: how confirmation + reminder jobs are dispatched and structured
+4. **Infinite scroll state**: persistence of filter + page state across navigation

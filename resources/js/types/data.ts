@@ -60,3 +60,37 @@ export interface DateBounds {
   min: string;
   max: string;
 }
+
+/**
+ * Attendee interface — attendee entry on the event detail page
+ * Names only — no email or user_id exposed (AC-301-3)
+ */
+export interface Attendee {
+  name: string;
+  registered_at: string; // YYYY-MM-DD
+}
+
+/**
+ * ShowEvent interface — event data shape for Events/Show.vue (detail page)
+ * @see EventController@show props contract
+ * @see ARCHITECTURE.md Section 4.2
+ */
+export interface ShowEvent {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  status: string;
+  venue_name: string | null;
+  location_city: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  starts_at_local: string;    // e.g. "8:00 PM" (from TimezoneService)
+  starts_at_date: string;     // e.g. "Tue, Jan 7, 2025" (from TimezoneService)
+  ends_at_local: string | null;
+  tz_label: string;           // e.g. "CET"
+  tz_identifier: string;      // e.g. "Europe/Paris"
+  utc_timestamp: number;
+  images: EventImage[];
+  cover_image_url: string | null;
+}
