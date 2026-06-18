@@ -31,6 +31,11 @@ const props = defineProps<{
 // markercluster handles ~2000 markers fine; raise only after performance testing.
 const MAX_MARKERS = 2000;
 
+// Side-list pagination — client-side windowed rendering of visibleRows.
+// Only LIST_PAGE_SIZE cards are rendered at a time; more load as the user scrolls.
+const LIST_PAGE_SIZE = 25;
+const displayLimit = ref(LIST_PAGE_SIZE);
+
 const { form, rows, total, loading, error, hasLoadedOnce, setFilters, reloadAll, retry } = useEventsData(props.filters);
 
 // Map refs — non-reactive (raw Leaflet objects must not be made reactive)
@@ -75,6 +80,53 @@ const visibleRows = computed<EventListItem[]>(() => {
             r.latitude >= b.south &&
             lngInRange(r.longitude, b.west, b.east),
     );
+});
+
+/**
+ * Windowed slice of visibleRows.  Only these cards are rendered in the DOM.
+ * The IntersectionObserver increments displayLimit as the user scrolls.
+ */
+const displayedRows = computed<EventListItem[]>(() => visibleRows.value.slice(0, displayLimit.value));
+
+// Reset the window whenever the in-view set changes (pan / zoom / filter).
+// This scrolls the side list back to the top conceptually — new viewport, fresh list.
+watch(visibleRows, () => {
+    displayLimit.value = LIST_PAGE_SIZE;
+});
+
+// Refs for the infinite-scroll IntersectionObserver
+const sideListContainer = ref<HTMLElement | null>(null);
+const sideListSentinel = ref<HTMLElement | null>(null);
+let sentinelObserver: IntersectionObserver | null = null;
+
+function setupSentinelObserver(): void {
+    if (sentinelObserver) {
+        sentinelObserver.disconnect();
+        sentinelObserver = null;
+    }
+    if (!sideListSentinel.value) return;
+
+    sentinelObserver = new IntersectionObserver(
+        (entries) => {
+            if (entries[0]?.isIntersecting && displayLimit.value < visibleRows.value.length) {
+                displayLimit.value += LIST_PAGE_SIZE;
+            }
+        },
+        {
+            // Use the scrollable aside as root so the observer fires on inner-panel scroll,
+            // not the document viewport.  Fall back to default (document) if ref is null.
+            root: sideListContainer.value ?? null,
+            rootMargin: '200px',
+            threshold: 0,
+        },
+    );
+    sentinelObserver.observe(sideListSentinel.value);
+}
+
+// Re-run observer setup whenever the sentinel (and its container) are mounted/unmounted
+// by Vue's v-else-if toggling.  watchEffect re-executes whenever the refs change.
+watch([sideListSentinel, sideListContainer], () => {
+    setupSentinelObserver();
 });
 
 /**
@@ -137,6 +189,11 @@ onMounted(async () => {
     // Correct initial panel state to viewport width (SSR defaulted to true above).
     sidePanelOpen.value = window.matchMedia('(min-width: 768px)').matches;
 
+    // Initial sentinel observer setup — refs may already be populated if Vue rendered
+    // the card list synchronously; the watch([sideListSentinel, sideListContainer]) handles
+    // later re-mounts when v-else-if toggles the list div in and out.
+    setupSentinelObserver();
+
     // Invalidate map size on viewport resize so tiles/markers stay aligned.
     window.addEventListener('resize', onWindowResize);
 
@@ -194,6 +251,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
     window.removeEventListener('resize', onWindowResize);
+    sentinelObserver?.disconnect();
+    sentinelObserver = null;
     map?.remove();
     map = null;
     clusterGroup = null;
@@ -346,6 +405,7 @@ function onWindowResize(): void {
             -->
             <aside
                 id="event-side-panel"
+                ref="sideListContainer"
                 :class="[
                     'flex flex-col overflow-y-auto bg-card',
                     'absolute right-0 top-0 h-full w-full max-w-xs border-l shadow-lg z-[1100]',
@@ -395,7 +455,7 @@ function onWindowResize(): void {
                     No events in this area — zoom out or pan to see more.
                 </div>
 
-                <!-- Event cards list (only events visible in the current viewport) -->
+                <!-- Event cards list (only events visible in the current viewport, paginated) -->
                 <div
                     v-else-if="visibleRows.length > 0"
                     class="flex flex-col gap-3 p-4"
@@ -403,10 +463,20 @@ function onWindowResize(): void {
                     aria-atomic="false"
                 >
                     <EventCard
-                        v-for="event in visibleRows"
+                        v-for="event in displayedRows"
                         :key="event.id"
                         :event="event"
                     />
+
+                    <!-- Infinite-scroll sentinel + "loading more" hint -->
+                    <div ref="sideListSentinel" aria-hidden="true">
+                        <p
+                            v-if="displayLimit < visibleRows.length"
+                            class="py-2 text-center text-xs text-muted-foreground"
+                        >
+                            Showing {{ displayedRows.length }} of {{ visibleRows.length }} — scroll for more
+                        </p>
+                    </div>
                 </div>
 
                 <!-- Loading skeleton while first fetch -->
