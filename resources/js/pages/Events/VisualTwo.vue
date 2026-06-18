@@ -11,7 +11,7 @@ import markerIconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png?url';
 import markerShadowUrl from 'leaflet/dist/images/marker-shadow.png?url';
 
 import { Head } from '@inertiajs/vue3';
-import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import FilterBar from '@/components/events/FilterBar.vue';
 import EventCard from '@/components/events/EventCard.vue';
 import EventEmptyState from '@/components/events/EventEmptyState.vue';
@@ -43,6 +43,39 @@ const sidePanelOpen = ref(true);
 
 // Track whether Leaflet has been initialised (guards plotMarkers from being called before init)
 const mapReady = ref(false);
+
+// Current map viewport bounds — updated on moveend/zoomend.
+// null until the map is ready (list falls back to all rows until first updateBounds call).
+interface MapBounds {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+}
+const mapBounds = ref<MapBounds | null>(null);
+
+/**
+ * Handles the antimeridian-wrap case:
+ *   normal:    west <= east  → longitude must be between them
+ *   wrapped:   west > east   → longitude is >= west (eastern part) OR <= east (western part)
+ */
+function lngInRange(lng: number, west: number, east: number): boolean {
+    return west <= east ? lng >= west && lng <= east : lng >= west || lng <= east;
+}
+
+/** Events whose marker falls inside the current map viewport. */
+const visibleRows = computed<EventListItem[]>(() => {
+    const b = mapBounds.value;
+    if (!b) return rows.value;
+    return rows.value.filter(
+        (r) =>
+            r.latitude != null &&
+            r.longitude != null &&
+            r.latitude <= b.north &&
+            r.latitude >= b.south &&
+            lngInRange(r.longitude, b.west, b.east),
+    );
+});
 
 /**
  * Scale guard: only plot the currently-loaded page set (≤50 events per fetch).
@@ -134,6 +167,21 @@ onMounted(async () => {
     clusterGroup = new L.MarkerClusterGroup({ showCoverageOnHover: false });
     map.addLayer(clusterGroup);
 
+    // Sync mapBounds on every pan/zoom so the side list reflects the viewport.
+    function updateBounds(): void {
+        if (!map) return;
+        const b = map.getBounds();
+        mapBounds.value = {
+            north: b.getNorth(),
+            south: b.getSouth(),
+            east: b.getEast(),
+            west: b.getWest(),
+        };
+    }
+    map.on('moveend zoomend', updateBounds);
+    // Populate bounds immediately (before any fitBounds fires moveend).
+    updateBounds();
+
     mapReady.value = true;
 
     // Plot any rows that already arrived before init finished (data-first race),
@@ -151,6 +199,7 @@ onUnmounted(() => {
     clusterGroup = null;
     leafletInstance = null;
     mapReady.value = false;
+    mapBounds.value = null;
 });
 
 function onFilterApply(): void {
@@ -306,9 +355,9 @@ function onWindowResize(): void {
                 aria-label="Event list — accessible alternative to the map"
             >
                 <div class="sticky top-0 z-10 border-b bg-card px-4 py-3">
-                    <h2 class="text-sm font-semibold">Events on map</h2>
-                    <p class="mt-0.5 text-xs text-muted-foreground">
-                        Showing {{ rows.length }} of {{ total !== null ? total.toLocaleString() : '…' }} event{{ rows.length === 1 ? '' : 's' }}
+                    <h2 class="text-sm font-semibold">Events in view</h2>
+                    <p class="mt-0.5 text-xs text-muted-foreground" aria-live="polite" aria-atomic="true">
+                        Showing {{ visibleRows.length }} of {{ total !== null ? total.toLocaleString() : '…' }} event{{ visibleRows.length === 1 ? '' : 's' }}
                     </p>
                     <!-- Cap notice: shown only when total exceeds MAX_MARKERS and all loaded rows are at the cap -->
                     <p
@@ -331,20 +380,30 @@ function onWindowResize(): void {
                     <EventErrorState :message="error" @retry="retry" />
                 </div>
 
-                <!-- Empty state -->
+                <!-- Empty state: no events match the current filter at all -->
                 <div v-else-if="hasLoadedOnce && !loading && rows.length === 0" class="p-4">
                     <EventEmptyState />
                 </div>
 
-                <!-- Event cards list -->
+                <!-- Empty-viewport state: events exist but none fall in the current map view -->
                 <div
-                    v-else-if="rows.length > 0"
+                    v-else-if="hasLoadedOnce && !loading && rows.length > 0 && visibleRows.length === 0"
+                    class="p-4 text-sm text-muted-foreground"
+                    role="status"
+                    aria-live="polite"
+                >
+                    No events in this area — zoom out or pan to see more.
+                </div>
+
+                <!-- Event cards list (only events visible in the current viewport) -->
+                <div
+                    v-else-if="visibleRows.length > 0"
                     class="flex flex-col gap-3 p-4"
                     aria-live="polite"
                     aria-atomic="false"
                 >
                     <EventCard
-                        v-for="event in rows"
+                        v-for="event in visibleRows"
                         :key="event.id"
                         :event="event"
                     />
