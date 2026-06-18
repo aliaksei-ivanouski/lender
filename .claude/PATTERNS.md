@@ -1,7 +1,7 @@
 # Established Coding Patterns
 
 _Last updated: 2026-06-18_
-_Updated after: TASK-6 (Wave 3, attendees & confirmation email) merged_
+_Updated after: TASK-7 (Wave 4, scheduled reminders) merged_
 
 ---
 
@@ -447,8 +447,59 @@ public function boot(): void {
 
 ---
 
+## Idempotent Scheduled Dispatch (Reminder Window Query + Post-Send Stamp)
+
+**Pattern**: Scheduled command scans a time window around target thresholds on a reference timestamp (event start time); queries for null reminder columns; stamps post-send to prevent re-dispatch; chunked iteration for scale.
+
+```php
+// app/Console/Commands/SendEventReminders.php
+class SendEventReminders extends Command {
+  public function handle(EventReminderService $service): int {
+    // Window 1: 3 days before event (±1h around now + 71-73 hours)
+    $this->dispatchReminders(type: '3day', 
+      windowStart: now()->addHours(71),
+      windowEnd: now()->addHours(73));
+    
+    // Window 2: 24 hours before event (±1h around now + 23-25 hours)
+    $this->dispatchReminders(type: '24hour',
+      windowStart: now()->addHours(23),
+      windowEnd: now()->addHours(25));
+    
+    return self::SUCCESS;
+  }
+  
+  private function dispatchReminders(string $type, Carbon $windowStart, Carbon $windowEnd): void {
+    $reminderColumn = $type === '3day' ? 'reminder_3day_sent_at' : 'reminder_24hour_sent_at';
+    
+    // Scan events in window; only process registrations with null reminder column (idempotent)
+    EventRegistration::query()
+      ->whereNull($reminderColumn)
+      ->where('status', 'confirmed')
+      ->whereBetween('events.created_time', 
+        [$windowStart->unix(), $windowEnd->unix()])
+      ->join('events', 'event_registrations.event_id', '=', 'events.id')
+      ->chunkById(500, function (Collection $registrations) use ($type, $reminderColumn) {
+        foreach ($registrations as $reg) {
+          $reg->user->notify(new EventReminderNotification($reg, $type));
+          
+          // Post-send stamp: prevents re-dispatch on next run
+          $reg->update([$reminderColumn => now()]);
+        }
+      });
+  }
+}
+
+// routes/console.php
+Schedule::command('events:send-reminders')->hourly();
+
+// Procfile.dev (or composer dev)
+schedule: php artisan schedule:work
+```
+
+**Use case**: Send reminder emails at fixed intervals (3 days + 24 hours before event). Query window accounts for timezone drift and cron scheduling variance. whereNull + post-send stamp guarantees exactly one email per threshold per registrant (re-runs are safe). Scale to 1.25M events via chunkById without loading all rows into memory.
+
+---
+
 ## Conventions to Establish in Later Waves
 
-1. **Scheduler integration**: how `schedule:work` dispatches reminder jobs at fixed intervals
-2. **Idempotent reminder dispatch**: how to track reminder-sent without duplicates
-3. **Infinite scroll state**: persistence of filter + page state across navigation
+1. **Infinite scroll state**: persistence of filter + page state across navigation
