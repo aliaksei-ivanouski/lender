@@ -23,7 +23,7 @@ confirmation and reminder emails — all on top of the existing Laravel 13 start
 | UI primitives | reka-ui 2.9 (shadcn-vue style, ~40 components) |
 | Database | SQLite (file, dev) / SQLite `:memory:` (tests) |
 | Queue | Database queue (`jobs` table, Laravel queue worker) |
-| Mail | Log driver in dev (emails written to `storage/logs`) |
+| Mail | `array` driver in dev (not sent externally); a concise "Mail sent" line is written to `storage/logs/laravel.log` |
 | Test runner | Pest 4.7 + PHPStan level 7 + Pint |
 | Typed route helpers | Laravel Wayfinder |
 | Docker dev env | Laravel Sail (dev dependency) |
@@ -174,7 +174,7 @@ This starts four concurrent processes:
 |---|---|
 | `php artisan serve --host=localhost` | App at **http://localhost:8000** |
 | `php artisan queue:listen --tries=1 --timeout=0` | Processes queued jobs (emails) |
-| `php artisan pail --timeout=0` | Live log tail (see emails in `MAIL_MAILER=log`) |
+| `php artisan pail --timeout=0` | Live log tail (see concise "Mail sent" lines as emails are dispatched) |
 | `npx vite` | Vite HMR dev server (avoids npm < 7 issue) |
 
 ### Key routes
@@ -262,16 +262,19 @@ Key `.env` values reviewers should be aware of:
 | `APP_DEBUG` | `true` | |
 | `APP_URL` | `http://localhost` | Artisan serve runs on port 8000 |
 | `DB_CONNECTION` | `sqlite` | File at `database/database.sqlite` |
-| `MAIL_MAILER` | `log` | Emails are written to `storage/logs`, **not actually sent**. View them with `artisan pail` or by reading the log file. |
+| `MAIL_MAILER` | `array` | Emails are **not sent externally**. The `array` driver discards the message body. A concise `Mail sent` log line (to + subject) is written to `storage/logs/laravel.log` when the queue worker processes each email. To inspect full HTML bodies, temporarily set `MAIL_MAILER=log`. |
 | `QUEUE_CONNECTION` | `database` | Jobs stored in the `jobs` table; requires `queue:listen` |
 | `SESSION_DRIVER` | `database` | Requires the `sessions` table (created by migration) |
 | `CACHE_STORE` | `database` | Requires the `cache` table (created by migration) |
 | `FILESYSTEM_DISK` | `local` | Event images will use the `public` disk (`storage/app/public`) |
 | `SEED_ROWS` | `1250000` | Override to seed a smaller dataset (e.g. `SEED_ROWS=5000`) |
 
-> **Emails in dev:** because `MAIL_MAILER=log`, every confirmation and reminder email is written
-> to `storage/logs/laravel.log`. Run `artisan pail` (included in `composer dev`) to watch them
-> appear in real time.
+> **Emails in dev:** `MAIL_MAILER=array` discards the message body — no HTML is written to the
+> log. Instead, a concise `Mail sent` line (to address + subject) is written to
+> `storage/logs/laravel.log` for every email the queue worker dispatches. The subject line conveys
+> the reason (e.g. "You're registered: {Event}"). Run `artisan pail` (included in `composer dev`)
+> to watch these lines appear in real time. To inspect full HTML bodies temporarily, set
+> `MAIL_MAILER=log` in `.env` and restart the worker.
 
 ---
 
