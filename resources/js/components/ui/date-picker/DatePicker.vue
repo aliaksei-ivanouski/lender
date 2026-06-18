@@ -158,10 +158,11 @@ function onClear(event: MouseEvent): void {
                 </span>
             </DatePickerTrigger>
 
-            <!-- Popover calendar content -->
+            <!-- Popover calendar content — portaled to body so it escapes the map stacking context -->
+            <Teleport to="body">
             <DatePickerContent
                 align="start"
-                class="z-50 mt-1 rounded-lg border bg-popover p-3 shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+                class="z-[1200] mt-1 rounded-lg border bg-popover p-3 shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
             >
                 <DatePickerCalendar v-slot="{ weekDays, grid }">
                     <!-- Header: prev / month+year selects / next -->
@@ -258,6 +259,7 @@ function onClear(event: MouseEvent): void {
                     </DatePickerGrid>
                 </DatePickerCalendar>
             </DatePickerContent>
+            </Teleport>
         </div>
     </DatePickerRoot>
 </template>

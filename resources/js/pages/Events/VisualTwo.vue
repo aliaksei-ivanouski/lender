@@ -26,7 +26,11 @@ const props = defineProps<{
     cities: string[];
 }>();
 
-const { form, rows, total, loading, error, hasLoadedOnce, loadMore, setFilters, applyFilters, retry } = useEventsData(props.filters);
+// MAX_MARKERS caps the map dataset to protect against the 1.25 M-row case.
+// markercluster handles ~2000 markers fine; raise only after performance testing.
+const MAX_MARKERS = 2000;
+
+const { form, rows, total, loading, error, hasLoadedOnce, setFilters, reloadAll, retry } = useEventsData(props.filters);
 
 // Map refs — non-reactive (raw Leaflet objects must not be made reactive)
 const mapContainer = ref<HTMLElement | null>(null);
@@ -132,11 +136,11 @@ onMounted(async () => {
     mapReady.value = true;
 
     // Plot any rows that already arrived before init finished (data-first race),
-    // then kick off the initial fetch for the normal (init-first) case.
-    // watch(rows) handles all subsequent filter-driven updates.
+    // then load ALL pages for the initial filter (up to MAX_MARKERS).
+    // watch(rows, deep) accumulates markers as pages arrive.
     plotMarkers(leafletInstance);
 
-    await loadMore();
+    await reloadAll(MAX_MARKERS);
 });
 
 onUnmounted(() => {
@@ -149,7 +153,9 @@ onUnmounted(() => {
 });
 
 function onFilterApply(): void {
-    applyFilters();
+    // Reset state and load ALL pages for the new filter (up to MAX_MARKERS).
+    // watch(rows, deep) will replot markers as each page arrives.
+    void reloadAll(MAX_MARKERS);
 }
 
 function toggleSidePanel(): void {
@@ -301,7 +307,16 @@ function onWindowResize(): void {
                 <div class="sticky top-0 z-10 border-b bg-card px-4 py-3">
                     <h2 class="text-sm font-semibold">Events on map</h2>
                     <p class="mt-0.5 text-xs text-muted-foreground">
-                        Showing {{ rows.length }} loaded event{{ rows.length === 1 ? '' : 's' }}
+                        Showing {{ rows.length }} of {{ total !== null ? total.toLocaleString() : '…' }} event{{ rows.length === 1 ? '' : 's' }}
+                    </p>
+                    <!-- Cap notice: shown only when total exceeds MAX_MARKERS and all loaded rows are at the cap -->
+                    <p
+                        v-if="total !== null && total > MAX_MARKERS && rows.length >= MAX_MARKERS"
+                        class="mt-1 text-xs text-amber-600 dark:text-amber-400"
+                        role="status"
+                        aria-live="polite"
+                    >
+                        Showing first {{ MAX_MARKERS.toLocaleString() }} of {{ total.toLocaleString() }} — refine filters to narrow results.
                     </p>
                 </div>
 

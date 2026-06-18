@@ -18,6 +18,8 @@ export interface UseEventsDataReturn {
     loadedMs: Ref<number>;
     hasMore: ComputedRef<boolean>;
     loadMore: () => Promise<void>;
+    loadAll: (maxRows?: number) => Promise<void>;
+    reloadAll: (maxRows?: number) => Promise<void>;
     setFilters: (partial: Partial<EventFilters>) => void;
     applyFilters: (newFilters?: Partial<EventFilters>) => void;
     retry: () => void;
@@ -129,6 +131,38 @@ export function useEventsData(initialFilters: EventFilters): UseEventsDataReturn
         }, 400);
     }
 
+    // Guard against concurrent loadAll / reloadAll calls.
+    let loadAllInProgress = false;
+
+    /**
+     * Fetch all remaining pages for the current filter state, up to maxRows.
+     * Appends to whatever rows are already loaded.
+     * Safe to call concurrently — a second call while one is running is a no-op.
+     */
+    async function loadAll(maxRows = 2000): Promise<void> {
+        if (loadAllInProgress) return;
+        loadAllInProgress = true;
+        try {
+            while (hasMore.value && rows.value.length < maxRows) {
+                // loadMore guards on loading internally; await ensures sequential pages.
+                await loadMore();
+                // If an error occurred inside loadMore, abort the loop.
+                if (error.value) break;
+            }
+        } finally {
+            loadAllInProgress = false;
+        }
+    }
+
+    /**
+     * Reset state then fetch all pages for the current filter, up to maxRows.
+     * Intended for filter-change scenarios in map views that need the full dataset.
+     */
+    async function reloadAll(maxRows = 2000): Promise<void> {
+        resetState();
+        await loadAll(maxRows);
+    }
+
     function retry(): void {
         error.value = null;
         void loadMore();
@@ -160,6 +194,8 @@ export function useEventsData(initialFilters: EventFilters): UseEventsDataReturn
         loadedMs,
         hasMore,
         loadMore,
+        loadAll,
+        reloadAll,
         setFilters,
         applyFilters,
         retry,
