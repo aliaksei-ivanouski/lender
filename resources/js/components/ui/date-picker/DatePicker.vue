@@ -105,21 +105,22 @@ const monthNames = [
     'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-// Derive selected month/year from placeholder for the selects
-const selectedMonth = computed(() => (calendarPlaceholder.value as CalendarDate).month);
-const selectedYear = computed(() => (calendarPlaceholder.value as CalendarDate).year);
+// Writable computeds for month/year selects — v-model keeps both fields in sync
+const monthModel = computed<number>({
+    get: () => (calendarPlaceholder.value as CalendarDate).month,
+    set: (m) => {
+        const cur = calendarPlaceholder.value as CalendarDate;
+        calendarPlaceholder.value = new CalendarDate(cur.year, m, 1);
+    },
+});
 
-function onMonthChange(event: Event): void {
-    const month = Number((event.target as HTMLSelectElement).value);
-    const current = calendarPlaceholder.value as CalendarDate;
-    calendarPlaceholder.value = new CalendarDate(current.year, month, 1);
-}
-
-function onYearChange(event: Event): void {
-    const year = Number((event.target as HTMLSelectElement).value);
-    const current = calendarPlaceholder.value as CalendarDate;
-    calendarPlaceholder.value = new CalendarDate(year, current.month, 1);
-}
+const yearModel = computed<number>({
+    get: () => (calendarPlaceholder.value as CalendarDate).year,
+    set: (y) => {
+        const cur = calendarPlaceholder.value as CalendarDate;
+        calendarPlaceholder.value = new CalendarDate(y, cur.month, 1);
+    },
+});
 
 function onDateSelect(value: DateValue | undefined): void {
     if (!value) {
@@ -202,10 +203,9 @@ function onClear(event: MouseEvent): void {
                         <!-- Month + Year selects replace the heading text for richer navigation -->
                         <div class="flex items-center gap-1">
                             <select
-                                :value="selectedMonth"
+                                v-model.number="monthModel"
                                 aria-label="Month"
                                 class="h-7 rounded border border-input bg-background px-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                @change="onMonthChange"
                             >
                                 <option
                                     v-for="(name, idx) in monthNames"
@@ -215,10 +215,9 @@ function onClear(event: MouseEvent): void {
                             </select>
 
                             <select
-                                :value="selectedYear"
+                                v-model.number="yearModel"
                                 aria-label="Year"
                                 class="h-7 rounded border border-input bg-background px-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                @change="onYearChange"
                             >
                                 <option
                                     v-for="year in yearRange"
