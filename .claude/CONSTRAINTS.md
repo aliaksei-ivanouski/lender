@@ -1,15 +1,22 @@
 # Active Constraints & Risks
 
 _Last updated: 2026-06-18_
-_Updated after: TASK-6 (Wave 3, attendees & confirmation email) completed_
+_Updated after: TASK-7 (Wave 4, scheduled reminders) merged_
 
 ---
+
+## Resolved Constraints (TASK-7, 2026-06-18)
+
+| Constraint | Resolution | ADR | Status |
+|---|---|---|---|
+| Scheduled reminder emails dispatch | `SendEventReminders` command (events:send-reminders hourly) scans for event registrations within ±1h windows around 3-day and 24-hour thresholds on event start time; dispatches EventReminderNotification (type discriminator) queued to mail; idempotent via reminder_3day_sent_at + reminder_24hour_sent_at nullable timestamp stamps (whereNull guard + post-send); chunkById(500) for 1.25M scale. Scheduler wired in routes/console.php + composer dev Procfile.dev. | ADR-017 | ✓ TASK-7 |
+| Migration indexes for reminder queries | `2026_06_18_000004_add_reminder_indexes_to_event_registrations_table.php` creates composite indexes on (status, reminder_3day_sent_at) + (status, reminder_24hour_sent_at) for efficient whereNull scans | — | ✓ TASK-7 |
 
 ## Resolved Constraints (TASK-6, 2026-06-18)
 
 | Constraint | Resolution | ADR | Status |
 |---|---|---|---|
-| Attendee registration & schema | `event_registrations` table (user_id FK, event_id FK, unique); status + reminder-sent tracking columns reserved for Wave 4; Fortify auth gated; firstOrCreate dedup; RegistrationConfirmationNotification queued on wasRecentlyCreated | ADR-014 | ✓ TASK-6 |
+| Attendee registration & schema | `event_registrations` table (user_id FK, event_id FK, unique); status + reminder_3day_sent_at + reminder_24hour_sent_at columns; Fortify auth gated; firstOrCreate dedup; RegistrationConfirmationNotification queued on wasRecentlyCreated | ADR-014 | ✓ TASK-6 |
 | Attendee display (privacy) | Event detail shows attendeeCount + first 20 names only (no emails, no PII) | ADR-015 | ✓ TASK-6 |
 | Confirmation email delivery | RegistrationConfirmationNotification queued; MAIL_MAILER=array + concise MessageSent logging (no HTML dump); acceptable for local dev + testing | ADR-016 | ✓ TASK-6 |
 
@@ -32,22 +39,10 @@ _Updated after: TASK-6 (Wave 3, attendees & confirmation email) completed_
 
 ---
 
-## Scheduled Reminder Emails (Still Open — Wave 4 / TASK-7)
-
-### No scheduler; queue worker only; reminder emails pending
-- **Detail**: `event_registrations` table includes `reminder_sent_3d` and `reminder_sent_24h` columns (reserved for Wave 4). Queue worker runs (`queue:listen`), but there is no `schedule:work` (scheduler). Reminders cannot be sent until scheduler is implemented.
-- **Impact**: Reminders cannot dispatch at fixed intervals (3 days before, 24 hours before event).
-- **Action required**: Wave 4 (TASK-7) adds `schedule:work` to dev commands; creates `SendEventReminders` command that scans for events within reminder thresholds and dispatches jobs idempotently (tracks reminder-sent timestamps). Ensure each attendee receives exactly one email per threshold.
-
 ### 1.25M events, ~2.5 GB SQLite, performance requirements
 - **Detail**: Default dataset is `SEED_ROWS=1_250_000` events. Listing query must be fast; filtering by date + location requires careful indexing.
 - **Impact**: Must add `created_time` index and `location_city` index during Wave 1; denormalize frequently filtered fields.
-- **Action required**: Create migration for indexes + bulk population of `location_city` in Wave 1 (TASK-3 planning phase).
-
-### No scheduler yet; queue worker only
-- **Detail**: `composer dev` runs `queue:listen` (worker), but there is no `schedule:work` (scheduler).
-- **Impact**: Reminder emails cannot be dispatched without a scheduler process.
-- **Action required**: Add `schedule:work` to `composer dev` dev commands (separate process). Create `SendEventReminders` command that runs at fixed interval, scans for events approaching thresholds, dispatches jobs idempotently.
+- **Action required**: Create migration for indexes + bulk population of `location_city` in Wave 1 (TASK-3 planning phase). [RESOLVED in TASK-3 + TASK-7]
 
 ---
 
@@ -120,13 +115,6 @@ _Updated after: TASK-6 (Wave 3, attendees & confirmation email) completed_
 - **Mitigation**: Add `attendees` table (PK: `id`, FK: `event_id`, FK: `user_id` or `email`, status: registered/interested).
   Add `Event::attendees()` relation.
 
-### No scheduler; queue worker only
-- **Detail**: `composer dev` runs `queue:listen` (worker), but there is no `schedule:work` (scheduler).
-  Laravel scheduled commands require the scheduler to dispatch them.
-- **Impact**: Reminder emails cannot be scheduled (e.g. send at 3 days before event).
-- **Mitigation**: Add `schedule:work` to `composer dev` dev commands (separate process). Or use a standalone cron job in production.
-  Create a command (e.g. `SendEventReminders`) that runs at a fixed interval (every hour), scans for events approaching 3-day / 24-hour
-  thresholds, and dispatches jobs to attendees. Ensure idempotency (each attendee gets exactly one email per threshold).
 
 ### `MAIL_MAILER=log` in local
 - **Detail**: Confirmation + reminder emails are logged, not actually sent.

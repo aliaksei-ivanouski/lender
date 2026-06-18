@@ -1,9 +1,9 @@
 # Project State — Index (Tier 1)
 _Last updated: 2026-06-18_
-_Updated after: TASK-6 (Wave 3 attendees & confirmation email) merged_
+_Updated after: TASK-7 (Wave 4 reminder scheduler) merged — PROJECT COMPLETE_
 
 **Events Visuals** — Laravel 13 + Vue 3 Inertia starter-kit with large seeded dataset (1.25M events, 3000 users).
-Build target: `Events/VisualOne.vue` + `Events/VisualTwo.vue` (empty stubs) + image support + filtering + attendee registration + reminder emails.
+**STATUS: FULLY DELIVERED** — All 7 user stories complete. Scope: two Event Visual pages (card grid + Leaflet map), local images (2+/event), DB-backed reverse-geocoded addresses, timezone-aware event-local times, date+location filtering, attendee registration, confirmation email, and 3-day + 24-hour reminder emails via hourly scheduler.
 
 ---
 
@@ -22,7 +22,7 @@ Build target: `Events/VisualOne.vue` + `Events/VisualTwo.vue` (empty stubs) + im
 |---|---|---|
 | **Dev** | `composer dev` (serve + queue:listen + pail + vite dev) | — |
 | **Setup** | `composer setup` (install + key + migrate + seed + npm build) | — |
-| **Test** | `composer test` (config:clear + pint + phpstan + artisan test) | 86 passing (Pest, in-memory SQLite) |
+| **Test** | `composer test` (config:clear + pint + phpstan + artisan test) | 95 passing (Pest, in-memory SQLite) — 459 assertions, 0 PHPStan errors |
 | **Lint** | `composer lint` (pint) | — |
 | **Types** | `composer types:check` (phpstan L7) + `npm run types:check` (vue-tsc) | — |
 | **Build** | `npm run build` (Vite + Tailwind) | — |
@@ -31,7 +31,14 @@ Build target: `Events/VisualOne.vue` + `Events/VisualTwo.vue` (empty stubs) + im
 
 ## Active Tasks
 
-*None in progress. Wave 4 (scheduler + reminder emails) is next.*
+**None. All 7 user-story tasks complete.**
+- TASK-1 (Wave 1: VisualOne card grid) ✓ merged
+- TASK-2 (Wave 2: VisualTwo Leaflet map) ✓ merged
+- TASK-3 (Wave 3: images + reverse-geocoding) ✓ merged
+- TASK-4 (Wave 3: event filtering by date + location) ✓ merged
+- TASK-5 (Wave 3: attendee registration UI) ✓ merged
+- TASK-6 (Wave 3: confirmation email) ✓ merged
+- TASK-7 (Wave 4: reminder scheduler) ✓ merged (commit 057317a)
 
 ---
 
@@ -45,10 +52,13 @@ Build target: `Events/VisualOne.vue` + `Events/VisualTwo.vue` (empty stubs) + im
 - **Planted bug**: `Events/Index.vue:148` `@click="aplyFilters"` (typo; function is `applyFilters`); Filter button is no-op
 - **Date + location filters not backend-implemented** — `from` plumbed but `loadListing` ignores it; no location filter at all
 - **Attendees schema complete** — `event_registrations` table with `user_id`, `event_id`, status, reminder-sent tracking; unique constraint; Event::registrations() + count
-- **No scheduler yet** — queue worker runs (`queue:listen`), but no `schedule:work` for scheduled reminder emails; Wave 4 scope
+- **Scheduler live** — `events:send-reminders` command runs hourly (console.php + crontab); two passes (3day/24hour), ±1h UTC window on events.created_time; chunkById(500), idempotent via `reminder_3day_sent_at` + `reminder_24hour_sent_at` stamps. PRODUCTION NOTE: server needs `* * * * * php artisan schedule:run` cron entry.
+- **Reminder emails queued** — `EventReminderNotification` (Laravel Mail), $type discriminator (3day/24hour), event-local time via TimezoneService + location
+- **Reminder indexes live** — composite indexes on `event_registrations`: (status, reminder_3day_sent_at) + (status, reminder_24hour_sent_at)
 - **`MAIL_MAILER=array` in tests** — logged; concise MessageSent listener logs one line per email; acceptable for local dev + testing
 - **Auth gated** — POST/DELETE `/events/{event}/registrations` require Fortify login; guests redirect to login
 - **Payload type inconsistency** — seeder stores strings; factory stores numbers; don't assume numeric types
+- **`.gitignore` updated** — transient `.claude/TASK_IN_PROGRESS` sentinel excluded
 
 ---
 

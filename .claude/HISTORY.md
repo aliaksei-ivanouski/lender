@@ -4,12 +4,25 @@ _Last updated: 2026-06-18_
 
 ---
 
+## Task 7: Scheduled Event Reminders (Wave 4)
+- **Branch**: `feat/us-007` (merged)
+- **Completed**: 2026-06-18
+- **Status**: MERGED (PR #12)
+- **Deliverables**:
+  - `SendEventReminders` command (`events:send-reminders`) — two passes: 3-day window [now+71h, now+73h], 24-hour window [now+23h, now+25h]; window computed on event start time (`events.created_time` UNIX); chunkById(500) over confirmed registrations with null reminder column; stamped post-send
+  - Migration: `2026_06_18_000004_add_reminder_indexes_to_event_registrations_table.php` — composite indexes on (status, reminder_3day_sent_at) + (status, reminder_24hour_sent_at)
+  - `EventReminderNotification` queued notification (mail channel) with type discriminator (3day/24hour); event-local time + timezone via TimezoneService + location
+  - Scheduler: `Schedule::command('events:send-reminders')->hourly()` in routes/console.php; `schedule:work` added to `composer dev` process group (Procfile.dev)
+  - Idempotency: whereNull guard + post-send stamp → re-runs send nothing; late registrations fall through to 24h pass only
+  - Test baseline: 95 passing, 459 assertions, PHPStan 0, Pint clean (was 86 in Task 6)
+  - Archive: `tasks/7-reminders/`
+
 ## Task 6: Attendees & Confirmation Email (Wave 3)
 - **Branch**: `feat/us-006` (merged)
 - **Completed**: 2026-06-18
 - **Status**: MERGED (PR #10 + follow-up PR #11)
 - **Deliverables**:
-  - `event_registrations` table (user_id FK, event_id FK, unique constraint) + status + reminder-sent tracking columns reserved for Wave 4
+  - `event_registrations` table (user_id FK, event_id FK, unique constraint) + status + reminder_3day_sent_at + reminder_24hour_sent_at (nullable timestamps, reserved for Wave 4)
   - `EventRegistration` model + `Event::registrations()` + `Event::attendeesCount`; User relations: registrations/registeredEvents
   - Auth-gated POST/DELETE `/events/{event}/registrations` (EventRegistrationController) — firstOrCreate dedup, notify only on wasRecentlyCreated, redirect-back + flash messaging
   - Guests redirected to Fortify login
