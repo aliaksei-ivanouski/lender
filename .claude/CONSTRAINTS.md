@@ -1,11 +1,39 @@
 # Active Constraints & Risks
 
 _Last updated: 2026-06-18_
-_Status_: All open (implementation will resolve)
 
 ---
 
-## Data Model Quirks
+## Resolved Constraints (2026-06-18)
+
+| Constraint | Resolution | ADR | Status |
+|---|---|---|---|
+| Address/location derivation strategy | Offline nearest-CITY_ANCHOR mapping; store in `location_city` column | ADR-001 | ✓ RESOLVED |
+| Attendee registration auth model | Authenticated-only via Fortify; `event_registrations(user_id FK, event_id FK, unique)` | ADR-002 | ✓ RESOLVED |
+| Timezone display strategy | Event-local via static CITY_ANCHOR→IANA map (~78 entries); TZ label shown; date filtering on event-local date | ADR-004 | ✓ RESOLVED |
+| Image strategy | 5–10 local placeholders in repo; `event_images` table; bulk seeding; served via `storage/app/public` | ADR-005 | ✓ RESOLVED |
+
+---
+
+## Active Constraints (Open — to be addressed in implementation)
+
+---
+
+## Scale & Performance (Still Open)
+
+### 1.25M events, ~2.5 GB SQLite, performance requirements
+- **Detail**: Default dataset is `SEED_ROWS=1_250_000` events. Listing query must be fast; filtering by date + location requires careful indexing.
+- **Impact**: Must add `created_time` index and `location_city` index during Wave 1; denormalize frequently filtered fields.
+- **Action required**: Create migration for indexes + bulk population of `location_city` in Wave 1 (TASK-3 planning phase).
+
+### No scheduler yet; queue worker only
+- **Detail**: `composer dev` runs `queue:listen` (worker), but there is no `schedule:work` (scheduler).
+- **Impact**: Reminder emails cannot be dispatched without a scheduler process.
+- **Action required**: Add `schedule:work` to `composer dev` dev commands (separate process). Create `SendEventReminders` command that runs at fixed interval, scans for events approaching thresholds, dispatches jobs idempotently.
+
+---
+
+## Data Model Quirks (Reference — already catalogued in Wave 1)
 
 ### `created_time` is event START time, not creation timestamp
 - **Detail**: Column `created_time` holds a UNIX timestamp that IS the event start time (not `created_at`).
