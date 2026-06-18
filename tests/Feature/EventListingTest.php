@@ -10,16 +10,6 @@ use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
 
-it('renders the events listing shell without authentication', function () {
-    $this->get(route('events.index'))
-        ->assertOk()
-        ->assertInertia(fn ($page) => $page
-            ->component('Events/Index')
-            ->has('statuses', 4)
-            ->where('filters.from', null)
-        );
-});
-
 it('returns a json page of events with load stats for lazy loading', function () {
     $user = User::factory()->create(['name' => 'Ada Lovelace']);
     Event::factory()->for($user)->create([
@@ -309,17 +299,4 @@ it('EventResource cover_image_url resolves to the lowest sort_order image url', 
 
     $coverUrl = $response->json('data.0.cover_image_url');
     expect($coverUrl)->toContain('placeholder-01.jpg');
-});
-
-it('index page includes cities list for location filter dropdown', function () {
-    $this->seed(CitySeeder::class);
-
-    $this->get(route('events.index'))
-        ->assertOk()
-        ->assertInertia(fn ($page) => $page
-            ->component('Events/Index')
-            ->has('cities')
-            ->has('filters.location_city')
-            ->has('filters.to')
-        );
 });

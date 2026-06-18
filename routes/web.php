@@ -3,9 +3,8 @@
 use App\Http\Controllers\EventController;
 use Illuminate\Support\Facades\Route;
 
-Route::redirect('/', '/events')->name('home');
+Route::redirect('/', '/events-visual-1')->name('home');
 
-Route::get('events', [EventController::class, 'index'])->name('events.index');
 Route::get('events/data', [EventController::class, 'data'])->name('events.data');
 Route::get('events/{event}', [EventController::class, 'show'])->name('events.show');
 

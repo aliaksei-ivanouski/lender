@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { BarChart3, BookOpen, FolderGit2, LayoutGrid, ListOrdered, Map } from '@lucide/vue';
+import { BarChart3, BookOpen, FolderGit2, LayoutGrid, Map } from '@lucide/vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
@@ -22,11 +22,6 @@ const mainNavItems: NavItem[] = [
         title: 'Dashboard',
         href: dashboard(),
         icon: LayoutGrid,
-    },
-    {
-        title: 'Events',
-        href: '/events',
-        icon: ListOrdered,
     },
     {
         title: 'Events Visual 1',

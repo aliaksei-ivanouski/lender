@@ -15,11 +15,6 @@ use Inertia\Response;
 
 class EventController extends Controller
 {
-    public function index(Request $request): Response
-    {
-        return Inertia::render('Events/Index', $this->sharedListingProps($request));
-    }
-
     public function visualOne(Request $request): Response
     {
         return Inertia::render('Events/VisualOne', $this->sharedListingProps($request));
